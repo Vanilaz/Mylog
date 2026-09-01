@@ -170,3 +170,6 @@ body.dark .status-pill.live { color: #000; border-color: var(--accent); backgrou
 
 .main-content.sidebar-collapsed .sidebar { width: 0 !important; flex: 0 0 0 !important; opacity: 0; pointer-events: none; overflow: hidden; }
 
+
+.sidebar { transition: width 0.3s ease, flex 0.3s ease, opacity 0.3s ease; }
+
