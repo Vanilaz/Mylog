@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
     const escapeRegExp = string => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const state = { path: null, selectedFile: null, files: [], sort: 'name', ascending: true, connection: null, paused: false, lineCount: 0, lastSearchData: null, fontSize: parseInt(localStorage.getItem('fontSize')) || 12 };
     if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark');
@@ -151,7 +151,7 @@
                         const response = await fetch(`${window.appBasePath}/api/files/list?path=` + encodeURIComponent(path));
                         const data = await response.json();
                         if (data.folders.length > 0) renderTreeNodes(childrenDiv, data.folders);
-                        else childrenDiv.innerHTML = '<div style="padding-left:15px; color:var(--muted); font-size:11px;">(Empty)</div>';
+                        else childrenDiv.innerHTML = '<div style="padding-left:15px; color:var(--muted); font-size:11px; font-style:italic;">(No subfolders)</div>';
                     } catch(e) { childrenDiv.innerHTML = '<div style="color:red;">Error</div>'; }
                 }
                 btn.classList.add('expanded');
@@ -191,7 +191,15 @@
             hideLoading();
         }
     }
-    document.addEventListener('click', async event => { const button = event.target.closest('button'); if (!button) return; try { if (button.dataset.folder) await loadFolder(button.dataset.folder); if (button.dataset.action === 'open') await openFile(button.dataset.path); if (button.dataset.action === 'tail') await tailFile(button.dataset.path); } catch (error) { renderOutput(`ERROR: ${error.message}`); } });
+    document.addEventListener('click', async event => {
+        try {
+            const target = event.target.closest('[data-folder], [data-action]');
+            if (!target) return;
+            if (target.dataset.folder) await loadFolder(target.dataset.folder);
+            if (target.dataset.action === 'open') await openFile(target.dataset.path);
+            if (target.dataset.action === 'tail') await tailFile(target.dataset.path);
+        } catch (error) { renderOutput(`ERROR: ${error.message}`); }
+    });
     const navigate = () => loadFolder($('current-path').value.trim()).catch(error => renderOutput(`ERROR: ${error.message}`));
     updateCustomRe();
     $('custom-highlight').addEventListener('change', () => {
