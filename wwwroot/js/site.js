@@ -102,8 +102,12 @@
             state.lineCount++;
             return `<span class="log-line" id="L${state.lineCount}"><a href="#L${state.lineCount}" class="line-number" onclick="highlightLine(${state.lineCount})">${state.lineCount}</a><span class="${classify(line)}">${applyCustomHighlights(escapeHtml(tryFormatJson(line)))}</span></span>`;
         }).join('\n');
-        if (append && viewer.innerHTML !== '') viewer.insertAdjacentHTML('beforeend', '\n' + html);
-        else viewer.insertAdjacentHTML('beforeend', html);
+        if (append && viewer.innerHTML !== '') {
+            viewer.insertAdjacentHTML('beforeend', '\n' + html);
+            while (viewer.childElementCount > 3000) viewer.removeChild(viewer.firstElementChild);
+        } else {
+            viewer.insertAdjacentHTML('beforeend', html);
+        }
         if ($('auto-scroll').checked) viewer.scrollTop = viewer.scrollHeight; 
     }
     function renderFiles() { const query = $('search-input').value.toLowerCase(); const visible = state.files.filter(file => (!query || file.name.toLowerCase().includes(query)) && (!$('logs-only').checked || file.extension.toLowerCase() === '.log')); visible.sort((a, b) => { const left = state.sort === 'size' ? a.size : state.sort === 'modified' ? new Date(a.lastModified) : a.name; const right = state.sort === 'size' ? b.size : state.sort === 'modified' ? new Date(b.lastModified) : b.name; return (left > right ? 1 : left < right ? -1 : 0) * (state.ascending ? 1 : -1); }); $('file-list').innerHTML = visible.map(file => `<tr><td><span class="file-name">${escapeHtml(file.name)}</span></td><td class="file-meta">${formatSize(file.size)}</td><td class="file-meta">${formatDate(file.lastModified)}</td><td class="file-meta">${escapeHtml(file.extension || 'file')}</td><td class="actions" style="text-align: right; display: flex; gap: 4px; justify-content: flex-end;"><button class="text-button" data-action="open" data-path="${escapeHtml(file.path)}">Open</button><button class="text-button" data-action="tail" data-path="${escapeHtml(file.path)}">Tail</button><a href="${window.appBasePath}/api/files/download?path=${encodeURIComponent(file.path)}" download style="text-decoration: none;"><button class="text-button">Download</button></a></td></tr>`).join(''); $('empty-state').style.display = visible.length ? 'none' : 'block'; }
@@ -163,7 +167,28 @@
         }
     });
 
-    async function loadFolder(path) { document.getElementById('file-panel').style.display = 'flex'; document.getElementById('viewer-panel').style.display = 'none'; showLoading('LOADING DIRECTORY...'); try { const response = await fetch(`${window.appBasePath}/api/files/list${path ? `?path=${encodeURIComponent(path)}` : ''}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to load folder.'); state.path = data.currentPath; state.files = data.files; $('current-path').value = data.currentPath; renderFiles(); } finally { hideLoading(); } }
+    state.folderCache = state.folderCache || {};
+    async function loadFolder(path) { 
+        document.getElementById('file-panel').style.display = 'flex'; 
+        document.getElementById('viewer-panel').style.display = 'none'; 
+        const fetchAndRender = async () => {
+            const response = await fetch(`${window.appBasePath}/api/files/list${path ? `?path=${encodeURIComponent(path)}` : ''}`); 
+            const data = await response.json(); 
+            if (!response.ok) throw new Error(data.error || 'Unable to load folder.'); 
+            state.folderCache[path || ''] = data;
+            state.path = data.currentPath; state.files = data.files; $('current-path').value = data.currentPath; 
+            renderFiles();
+        };
+        if (state.folderCache[path || '']) {
+            const data = state.folderCache[path || ''];
+            state.path = data.currentPath; state.files = data.files; $('current-path').value = data.currentPath; 
+            renderFiles();
+            fetchAndRender().catch(e => console.error(e));
+        } else {
+            showLoading('LOADING DIRECTORY...'); 
+            try { await fetchAndRender(); } finally { hideLoading(); } 
+        }
+    }
     async function openFile(path) { document.getElementById('file-panel').style.display = 'none'; document.getElementById('viewer-panel').style.display = 'flex'; showLoading('OPENING FILE...'); try { state.selectedFile = path; const response = await fetch(`${window.appBasePath}/api/files/content?path=${encodeURIComponent(path)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to open file.'); $('viewer-title').textContent = data.fileName; renderOutput(data.content); $('connection-status').textContent = data.isTruncated ? 'PARTIAL READ' : 'READY'; $('pause-button').disabled = true; } finally { hideLoading(); } }
     async function tailFile(path) { document.getElementById('file-panel').style.display = 'none'; document.getElementById('viewer-panel').style.display = 'flex'; showLoading('CONNECTING LIVE TAIL...'); try { state.selectedFile = path; if (typeof signalR === 'undefined') throw new Error('SignalR client could not load. Check network access and refresh the page.'); if (!state.connection) { state.connection = new signalR.HubConnectionBuilder().withUrl(`${window.appBasePath}/hubs/log`).withAutomaticReconnect().build(); state.connection.on('LogAppended', text => { if (!state.paused) renderOutput(text, true); }); } if (state.connection.state === 'Disconnected') { await state.connection.start(); } await state.connection.invoke('Subscribe', path); state.paused = false; $('viewer-title').textContent = path.split(/[\\/]/).pop(); $('connection-status').textContent = 'LIVE'; $('connection-status').classList.add('live'); $('pause-button').disabled = false; $('pause-button').textContent = 'Pause'; renderOutput(''); } finally { hideLoading(); } }
     async function searchContent() { 
