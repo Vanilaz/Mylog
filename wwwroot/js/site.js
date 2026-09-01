@@ -191,11 +191,22 @@
     async function openFile(path) { document.getElementById('file-panel').style.display = 'none'; document.getElementById('viewer-panel').style.display = 'flex'; showLoading('OPENING FILE...'); try { state.selectedFile = path; const response = await fetch(`${window.appBasePath}/api/files/content?path=${encodeURIComponent(path)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to open file.'); $('viewer-title').textContent = data.fileName; renderOutput(data.content); $('connection-status').textContent = data.isTruncated ? 'PARTIAL READ' : 'READY'; $('pause-button').disabled = true; } finally { hideLoading(); } }
     async function tailFile(path) { document.getElementById('file-panel').style.display = 'none'; document.getElementById('viewer-panel').style.display = 'flex'; showLoading('CONNECTING LIVE TAIL...'); try { state.selectedFile = path; if (typeof signalR === 'undefined') throw new Error('SignalR client could not load. Check network access and refresh the page.'); if (!state.connection) { state.connection = new signalR.HubConnectionBuilder().withUrl(`${window.appBasePath}/hubs/log`).withAutomaticReconnect().build(); state.connection.on('LogAppended', text => { if (!state.paused) renderOutput(text, true); }); } if (state.connection.state === 'Disconnected') { await state.connection.start(); } await state.connection.invoke('Subscribe', path); state.paused = false; $('viewer-title').textContent = path.split(/[\\/]/).pop(); $('connection-status').textContent = 'LIVE'; $('connection-status').classList.add('live'); $('pause-button').disabled = false; $('pause-button').textContent = 'Pause'; renderOutput(''); } finally { hideLoading(); } }
     async function searchContent() { 
-        showLoading('SEARCHING LOGS...'); 
         try {
             if (!state.selectedFile) throw new Error('Open or tail a file before searching.'); 
             const query = $('content-search').value; 
-            if (!query) throw new Error('Please enter a search query.');
+            if (!query) {
+                $('search-summary').textContent = '';
+                state.lastSearchData = null;
+                if (state.connection) {
+                    await state.connection.stop();
+                    state.connection = null;
+                    await tailFile(state.selectedFile);
+                    return;
+                }
+                await openFile(state.selectedFile);
+                return;
+            }
+            showLoading('SEARCHING LOGS...'); 
             const regex = $('search-mode').value === 'regex'; 
             const ctx = $('search-context').value; 
             const response = await fetch(`${window.appBasePath}/api/files/search?path=${encodeURIComponent(state.selectedFile)}&query=${encodeURIComponent(query)}&regex=${regex}&context=${ctx}`); 
