@@ -1,20 +1,20 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  /* LIGHT MODE (Default) */
-  --ink: #0F172A;
-  --muted: #64748B;
-  --line: #E2E8F0;
-  --paper: #F8FAFC;
-  --panel: #FFFFFF;
-  --panel-hover: #F1F5F9;
-  --accent: #22C55E;
-  --teal: #0284C7;
-  --viewer: #0F172A;
-  --code: #F8FAFC;
-  --error: #EF4444;
-  --warn: #F59E0B;
-  --info: #38BDF8;
+  /* LIGHT MODE (DEFAULT) */
+  --ink: #1e293b;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --paper: #f8fafc;
+  --panel: #ffffff;
+  --panel-hover: #f1f5f9;
+  --accent: #2563eb;
+  --teal: #0f766e;
+  --viewer: #ffffff;
+  --code: #334155;
+  --error: #e11d48;
+  --warn: #d97706;
+  --info: #059669;
   --hl-bg: rgba(234, 179, 8, 0.2);
   --hl-border: #EAB308;
 }
@@ -33,7 +33,7 @@ body.dark {
   --code: #00F0FF;
   --error: #FF003C;
   --warn: #FCEE0A;
-  --info: #D902EE;
+  --info: #39FF14;
   --hl-bg: rgba(255, 0, 60, 0.25);
   --hl-border: #FF003C;
 }
