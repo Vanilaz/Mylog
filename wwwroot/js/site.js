@@ -100,6 +100,9 @@
         }
         const html = newLines.map(line => {
             state.lineCount++;
+            if (line.length > 15000) {
+                line = line.substring(0, 15000) + ' ... [LINE TRUNCATED FOR PERFORMANCE. DOWNLOAD TO VIEW FULL]';
+            }
             return `<span class="log-line" id="L${state.lineCount}"><a href="#L${state.lineCount}" class="line-number" onclick="highlightLine(${state.lineCount})">${state.lineCount}</a><span class="${classify(line)}">${applyCustomHighlights(escapeHtml(tryFormatJson(line)))}</span></span>`;
         }).join('\n');
         if (append && viewer.innerHTML !== '') {
