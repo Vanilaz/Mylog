@@ -5,6 +5,7 @@ namespace MyLog.Services;
 public interface IFileBrowserService
 {
     IReadOnlyList<string> AllowedRoots { get; }
+    IReadOnlyList<FolderItemDto> GetRoots();
     Task<FileListDto> ListAsync(string? path, CancellationToken cancellationToken);
     Task<FileContentDto> ReadContentAsync(string path, CancellationToken cancellationToken);
     Task<IReadOnlyList<FileSearchResultDto>> SearchContentAsync(string path, string query, bool regularExpression, int context, CancellationToken cancellationToken);
