@@ -1,4 +1,4 @@
-(() => {
+﻿(() => {
     const escapeRegExp = string => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const state = { path: null, selectedFile: null, files: [], sort: 'name', ascending: true, connection: null, paused: false, lineCount: 0, lastSearchData: null, fontSize: parseInt(localStorage.getItem('fontSize')) || 12 };
     if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark');
@@ -107,66 +107,6 @@
             if (overlay) overlay.classList.add('hidden');
         }
     }
-        async function initTree() {
-        try {
-            const response = await fetch(${window.appBasePath}/api/files/list);
-            const data = await response.json();
-            root-count.textContent = data.folders.length;
-            renderTreeNodes(folder-tree, data.folders);
-        } catch (e) {
-            console.error('Failed to init tree', e);
-        }
-    }
-    function renderTreeNodes(container, folders) {
-        if (!folders || folders.length === 0) return;
-        const ul = document.createElement('div');
-        ul.className = 'tree-level';
-        ul.style.paddingLeft = container.id === 'folder-tree' ? '0' : '15px';
-        folders.forEach(folder => {
-            const node = document.createElement('div');
-            node.className = 'tree-node';
-            node.innerHTML = 
-                <div style="display: flex; align-items: center; padding: 4px 0; cursor: pointer;">
-                    <span class="tree-toggle" data-tree-path="+escapeHtml(folder.path)+" style="width: 20px; text-align: center; color: var(--muted); font-family: monospace;">&#9654;</span>
-                    <span class="tree-label" data-folder="+escapeHtml(folder.path)+" style="color: var(--ink); flex: 1; user-select: none;">+escapeHtml(folder.name)+</span>
-                </div>
-                <div class="tree-children" style="display: none;"></div>
-            ;
-            ul.appendChild(node);
-        });
-        container.appendChild(ul);
-    }
-    document.addEventListener('click', async event => {
-        if (event.target.classList.contains('tree-toggle')) {
-            const btn = event.target;
-            const path = btn.dataset.treePath;
-            const childrenDiv = btn.parentElement.nextElementSibling;
-            if (btn.classList.contains('expanded')) {
-                btn.classList.remove('expanded');
-                btn.innerHTML = '&#9654;'; // right arrow
-                childrenDiv.style.display = 'none';
-            } else {
-                if (childrenDiv.innerHTML === '') {
-                    // Fetch children
-                    try {
-                        btn.innerHTML = '&#8987;'; // hourglass
-                        const response = await fetch(${window.appBasePath}/api/files/list?path= + encodeURIComponent(path));
-                        const data = await response.json();
-                        if (data.folders.length > 0) {
-                            renderTreeNodes(childrenDiv, data.folders);
-                        } else {
-                            childrenDiv.innerHTML = '<div style="padding-left:15px; color:var(--muted); font-size:11px;">(Empty)</div>';
-                        }
-                    } catch(e) {
-                        childrenDiv.innerHTML = '<div style="color:red;">Error</div>';
-                    }
-                }
-                btn.classList.add('expanded');
-                btn.innerHTML = '&#9660;'; // down arrow
-                childrenDiv.style.display = 'block';
-            }
-        }
-    });
     async function initTree() {
         try {
             const response = await fetch(`${window.appBasePath}/api/files/list`);
@@ -282,4 +222,5 @@
 })();
 
 document.getElementById('toggle-sidebar').addEventListener('click', () => { document.querySelector('.workspace').classList.toggle('sidebar-collapsed'); });
+
 
