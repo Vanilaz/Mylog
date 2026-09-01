@@ -11,34 +11,58 @@
     const formatSize = bytes => bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
     const formatDate = value => new Date(value).toLocaleString('sv-SE').replace('T', ' ');
     const classify = line => /error/i.test(line) ? 'error' : /warn/i.test(line) ? 'warn' : /info/i.test(line) ? 'info' : '';
-    function applyCustomHighlights(html) {
+    let customRe = null;
+    function updateCustomRe() {
         const kws = $('custom-highlight').value.split(',').map(k => k.trim()).filter(k => k);
-        if (kws.length === 0) return html;
-        let t = html;
-        kws.forEach(kw => {
-            const re = new RegExp(`(?![^<]*>)(${escapeRegExp(kw)})`, 'gi');
-            t = t.replace(re, '<span class="custom-hl">$1</span>');
-        });
-        return t;
+        customRe = kws.length > 0 ? new RegExp(`(${kws.map(escapeRegExp).join('|')})`, 'gi') : null;
     }
-    function highlightMatches(line, query, regex) {
-        let output = '';
-        if (!query) { output = escapeHtml(line); }
-        else {
-            let matchIndex = 0; let lastIndex = 0;
-            try {
-                const re = new RegExp(regex ? query : escapeRegExp(query), regex ? 'gi' : 'i');
-                let match;
-                while ((match = re.exec(line)) !== null && matchIndex < 100) {
-                    if (match[0].length === 0) break;
-                    output += escapeHtml(line.slice(lastIndex, match.index));
-                    output += `<mark>${escapeHtml(match[0])}</mark>`;
-                    lastIndex = re.lastIndex; matchIndex++;
-                }
-                output += escapeHtml(line.slice(lastIndex));
-            } catch { output = escapeHtml(line); }
+    function highlightMatches(line, query, regexMode) {
+        let searchRe = null;
+        if (query) {
+            try { searchRe = new RegExp(regexMode ? query : escapeRegExp(query), regexMode ? 'gi' : 'i'); } 
+            catch { searchRe = null; }
         }
-        return applyCustomHighlights(output);
+        if (!searchRe && !customRe) return escapeHtml(line);
+        let result = '';
+        let lastIdx = 0;
+        if (searchRe) {
+            let chunks = [];
+            line.replace(searchRe, (match, ...args) => {
+                const offset = args[args.length - 2];
+                chunks.push({ text: line.slice(lastIdx, offset), isMark: false });
+                chunks.push({ text: match, isMark: true });
+                lastIdx = offset + match.length;
+                return match;
+            });
+            chunks.push({ text: line.slice(lastIdx), isMark: false });
+            for (const chunk of chunks) {
+                if (chunk.isMark) {
+                    result += `<mark>${escapeHtml(chunk.text)}</mark>`;
+                } else if (customRe && chunk.text) {
+                    let cLast = 0;
+                    chunk.text.replace(customRe, (m, ...a) => {
+                        const off = a[a.length - 2];
+                        result += escapeHtml(chunk.text.slice(cLast, off));
+                        result += `<span class="custom-hl">${escapeHtml(m)}</span>`;
+                        cLast = off + m.length;
+                        return m;
+                    });
+                    result += escapeHtml(chunk.text.slice(cLast));
+                } else {
+                    result += escapeHtml(chunk.text);
+                }
+            }
+        } else if (customRe) {
+            line.replace(customRe, (m, ...a) => {
+                const off = a[a.length - 2];
+                result += escapeHtml(line.slice(lastIdx, off));
+                result += `<span class="custom-hl">${escapeHtml(m)}</span>`;
+                lastIdx = off + m.length;
+                return m;
+            });
+            result += escapeHtml(line.slice(lastIdx));
+        }
+        return result;
     }
     function renderOutput(text, append = false) { 
         const viewer = $('log-viewer'); 
@@ -58,10 +82,12 @@
     async function loadFolder(path) { const response = await fetch(`${window.appBasePath}/api/files/list${path ? `?path=${encodeURIComponent(path)}` : ''}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to load folder.'); state.path = data.currentPath; state.files = data.files; $('current-path').value = data.currentPath; $('root-count').textContent = data.folders.length; let html = data.parentPath ? `<button class="folder" style="font-weight: 600; font-style: italic; color: var(--muted);" data-folder="${escapeHtml(data.parentPath)}">&#11014; [ Go Up ]</button>` : ''; html += data.folders.map(folder => `<button class="folder ${folder.path === state.path ? 'active' : ''}" data-folder="${escapeHtml(folder.path)}">${escapeHtml(folder.name)}</button>`).join(''); $('folder-tree').innerHTML = html || '<span class="file-meta">No subfolders</span>'; renderFiles(); }
     async function openFile(path) { state.selectedFile = path; const response = await fetch(`${window.appBasePath}/api/files/content?path=${encodeURIComponent(path)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to open file.'); $('viewer-title').textContent = data.fileName; renderOutput(data.content); $('connection-status').textContent = data.isTruncated ? 'PARTIAL READ' : 'READY'; $('pause-button').disabled = true; }
     async function tailFile(path) { state.selectedFile = path; if (typeof signalR === 'undefined') throw new Error('SignalR client could not load. Check network access and refresh the page.'); if (!state.connection) { state.connection = new signalR.HubConnectionBuilder().withUrl(`${window.appBasePath}/hubs/log`).withAutomaticReconnect().build(); state.connection.on('LogAppended', text => { if (!state.paused) renderOutput(text, true); }); await state.connection.start(); } await state.connection.invoke('Subscribe', path); state.paused = false; $('viewer-title').textContent = path.split(/[\\/]/).pop(); $('connection-status').textContent = 'LIVE'; $('connection-status').classList.add('live'); $('pause-button').disabled = false; $('pause-button').textContent = 'Pause'; renderOutput(''); }
-    async function searchContent() { if (!state.selectedFile) throw new Error('Open or tail a file before searching.'); const query = $('content-search').value; const regex = $('search-mode').value === 'regex'; const ctx = $('search-context').value; const response = await fetch(`${window.appBasePath}/api/files/search?path=${encodeURIComponent(state.selectedFile)}&query=${encodeURIComponent(query)}&regex=${regex}&context=${ctx}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to search file content.'); const matchCount = data.filter(d => d.isMatch).length; $('search-summary').textContent = `${matchCount} match${matchCount === 1 ? '' : 'es'}`; $('log-viewer').innerHTML = data.length ? data.map(result => `<span class="log-line ${result.isMatch ? '' : 'context-line'}" id="L${result.lineNumber}"><a href="#L${result.lineNumber}" class="line-number" onclick="highlightLine(${result.lineNumber})">${result.lineNumber}</a><span class="${classify(result.line)}">${result.isMatch ? highlightMatches(result.line, query, regex) : applyCustomHighlights(escapeHtml(result.line))}</span></span>`).join('\n') : 'No matching lines.'; state.lastSearchData = data; $('export-search-button').style.display = data.length ? 'inline-block' : 'none'; }
+    async function searchContent() { if (!state.selectedFile) throw new Error('Open or tail a file before searching.'); const query = $('content-search').value; const regex = $('search-mode').value === 'regex'; const ctx = $('search-context').value; const response = await fetch(`${window.appBasePath}/api/files/search?path=${encodeURIComponent(state.selectedFile)}&query=${encodeURIComponent(query)}&regex=${regex}&context=${ctx}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to search file content.'); const matchCount = data.filter(d => d.isMatch).length; $('search-summary').textContent = `${matchCount} match${matchCount === 1 ? '' : 'es'}`; $('log-viewer').innerHTML = data.length ? data.map(result => `<span class="log-line ${result.isMatch ? '' : 'context-line'}" id="L${result.lineNumber}"><a href="#L${result.lineNumber}" class="line-number" onclick="highlightLine(${result.lineNumber})">${result.lineNumber}</a><span class="${classify(result.line)}">${result.isMatch ? highlightMatches(result.line, query, regex) : highlightMatches(result.line, '', false)}</span></span>`).join('\n') : 'No matching lines.'; state.lastSearchData = data; $('export-search-button').style.display = data.length ? 'inline-block' : 'none'; }
     document.addEventListener('click', async event => { const button = event.target.closest('button'); if (!button) return; try { if (button.dataset.folder) await loadFolder(button.dataset.folder); if (button.dataset.action === 'open') await openFile(button.dataset.path); if (button.dataset.action === 'tail') await tailFile(button.dataset.path); } catch (error) { renderOutput(`ERROR: ${error.message}`); } });
     const navigate = () => loadFolder($('current-path').value.trim()).catch(error => renderOutput(`ERROR: ${error.message}`));
+    updateCustomRe();
     $('custom-highlight').addEventListener('change', () => {
+        updateCustomRe();
         if (!state.selectedFile) return;
         if (state.connection) { state.connection.stop().then(() => tailFile(state.selectedFile)); }
         else if (state.lastSearchData) { searchContent(); }
