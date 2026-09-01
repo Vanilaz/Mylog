@@ -229,6 +229,6 @@
     checkUrlParams();
 })();
 
-document.getElementById('toggle-sidebar').addEventListener('click', () => { document.querySelector('.workspace').classList.toggle('sidebar-collapsed'); });
+document.getElementById('toggle-sidebar').addEventListener('click', () => { document.querySelector('.main-content').classList.toggle('sidebar-collapsed'); });
 
 
