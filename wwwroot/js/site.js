@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
     const escapeRegExp = string => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const state = { path: null, selectedFile: null, files: [], sort: 'name', ascending: true, connection: null, paused: false, lineCount: 0, lastSearchData: null, fontSize: parseInt(localStorage.getItem('fontSize')) || 12 };
     if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark');
@@ -64,11 +64,17 @@
         if (!$('auto-format-json') || !$('auto-format-json').checked) return text;
         let start = text.indexOf('{'); let end = text.lastIndexOf('}');
         if (start !== -1 && end > start) {
-            try { let parsed = JSON.parse(text.substring(start, end + 1)); return text.substring(0, start) + '\n' + JSON.stringify(parsed, null, 2) + '\n' + text.substring(end + 1); } catch(e) {}
+            let chunk = text.substring(start, end + 1);
+            if (chunk.indexOf('"') !== -1 && chunk.indexOf(':') !== -1) {
+                try { let parsed = JSON.parse(chunk); return text.substring(0, start) + '\n' + JSON.stringify(parsed, null, 2) + '\n' + text.substring(end + 1); } catch(e) {}
+            }
         }
         start = text.indexOf('['); end = text.lastIndexOf(']');
         if (start !== -1 && end > start) {
-            try { let parsed = JSON.parse(text.substring(start, end + 1)); return text.substring(0, start) + '\n' + JSON.stringify(parsed, null, 2) + '\n' + text.substring(end + 1); } catch(e) {}
+            let chunk = text.substring(start, end + 1);
+            if (chunk.indexOf('"') !== -1 && chunk.indexOf(':') !== -1) {
+                try { let parsed = JSON.parse(chunk); return text.substring(0, start) + '\n' + JSON.stringify(parsed, null, 2) + '\n' + text.substring(end + 1); } catch(e) {}
+            }
         }
         return text;
     };
