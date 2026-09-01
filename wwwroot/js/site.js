@@ -184,9 +184,9 @@
             const path = escapeHtml(file.path);
             return '<tr>'
                  + `<td><span class="file-name">${escapeHtml(file.name)}</span></td>`
-                 + `<td class="file-meta">${formatSize(file.size)}</td>`
-                 + `<td class="file-meta">${formatDate(file.lastModified)}</td>`
-                 + `<td class="file-meta">${escapeHtml(file.extension || 'file')}</td>`
+                 + `<td class="file-meta" data-label="Size">${formatSize(file.size)}</td>`
+                 + `<td class="file-meta" data-label="Modified">${formatDate(file.lastModified)}</td>`
+                 + `<td class="file-meta" data-label="Type">${escapeHtml(file.extension || 'file')}</td>`
                  + '<td class="actions"><span class="row-actions">'
                  + `<button class="text-button" data-action="open" data-path="${path}">Open</button>`
                  + `<button class="text-button" data-action="tail" data-path="${path}">Tail</button>`
@@ -265,6 +265,7 @@
             node.innerHTML =
                 '<div class="tree-row">'
               + `<button type="button" class="tree-toggle" data-tree-path="${escapeHtml(folder.path)}" `
+              + `data-folder-name="${escapeHtml(folder.name)}" `
               + `aria-expanded="false" aria-label="Expand ${escapeHtml(folder.name)}">&#9654;</button>`
               + `<button type="button" class="tree-label" data-folder="${escapeHtml(folder.path)}" `
               + `title="${escapeHtml(folder.path)}">${escapeHtml(folder.name)}</button>`
@@ -275,33 +276,52 @@
         container.appendChild(level);
     }
 
+    function setToggleState(toggle, expanded) {
+        const name = toggle.dataset.folderName || 'folder';
+        toggle.setAttribute('aria-expanded', String(expanded));
+        toggle.setAttribute('aria-label', `${expanded ? 'Collapse' : 'Expand'} ${name}`);
+        toggle.innerHTML = expanded ? '&#9660;' : '&#9654;';
+    }
+
     document.addEventListener('click', async event => {
         const toggle = event.target.closest('.tree-toggle');
         if (!toggle) return;
-        const children = toggle.closest('.tree-node').querySelector('.tree-children');
-        const expanded = toggle.getAttribute('aria-expanded') === 'true';
 
-        if (expanded) {
-            toggle.setAttribute('aria-expanded', 'false');
-            toggle.innerHTML = '&#9654;';
+        // Re-entrancy guard, set synchronously and held across the await below.
+        // Clicking twice while the listing was in flight used to start a second
+        // fetch and append a second copy of every child, duplicating the menu.
+        if (toggle.dataset.busy === 'true') return;
+
+        const children = toggle.closest('.tree-node').querySelector('.tree-children');
+
+        if (toggle.getAttribute('aria-expanded') === 'true') {
+            setToggleState(toggle, false);
             children.hidden = true;
             return;
         }
 
-        if (!children.hasChildNodes()) {
+        if (toggle.dataset.loaded !== 'true') {
+            toggle.dataset.busy = 'true';
             toggle.innerHTML = '&#8987;';
             try {
                 const response = await fetch(`${api('/api/files/list?path=')}${encodeURIComponent(toggle.dataset.treePath)}`);
                 if (!response.ok) throw await responseError(response, 'Unable to expand folder.');
                 const data = await response.json();
+                // Replace rather than append, so a retry can never stack results.
+                children.replaceChildren();
                 if (data.folders.length) renderTreeNodes(children, data.folders);
                 else children.innerHTML = '<p class="tree-empty">(No subfolders)</p>';
+                toggle.dataset.loaded = 'true';
             } catch (error) {
+                // Leave it unloaded so the next click retries.
+                children.replaceChildren();
                 children.innerHTML = `<p class="tree-empty">${escapeHtml(error.message)}</p>`;
+            } finally {
+                toggle.dataset.busy = 'false';
             }
         }
-        toggle.setAttribute('aria-expanded', 'true');
-        toggle.innerHTML = '&#9660;';
+
+        setToggleState(toggle, true);
         children.hidden = false;
     });
 
@@ -490,6 +510,7 @@
             if (target.dataset.folder) {
                 document.querySelectorAll('.tree-label.active').forEach(el => el.classList.remove('active'));
                 target.classList.add('active');
+                if (drawerQuery.matches) setSidebar(false);
                 await loadFolder(target.dataset.folder);
             } else if (target.dataset.action === 'open') {
                 await openFile(target.dataset.path);
@@ -531,10 +552,27 @@
         $('theme-button').setAttribute('aria-pressed', String(dark));
     });
 
-    $('toggle-sidebar').addEventListener('click', () => {
-        const collapsed = document.querySelector('.main-content').classList.toggle('sidebar-collapsed');
-        $('toggle-sidebar').setAttribute('aria-expanded', String(!collapsed));
+    // Below this width the sidebar is a fixed overlay drawer rather than a column.
+    const drawerQuery = window.matchMedia('(max-width: 900px)');
+
+    function setSidebar(open) {
+        document.querySelector('.main-content').classList.toggle('sidebar-collapsed', !open);
+        $('toggle-sidebar').setAttribute('aria-expanded', String(open));
+        $('sidebar-backdrop').hidden = !(open && drawerQuery.matches);
+    }
+
+    const sidebarOpen = () => !document.querySelector('.main-content').classList.contains('sidebar-collapsed');
+
+    $('toggle-sidebar').addEventListener('click', () => setSidebar(!sidebarOpen()));
+    $('sidebar-backdrop').addEventListener('click', () => setSidebar(false));
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && drawerQuery.matches && sidebarOpen()) setSidebar(false);
     });
+
+    // Crossing the breakpoint: the drawer should not be left open over the content,
+    // and the desktop column should not stay hidden just because the drawer was shut.
+    drawerQuery.addEventListener('change', event => setSidebar(!event.matches));
 
     $('custom-highlight').addEventListener('change', () => {
         updateCustomRe();
@@ -621,6 +659,28 @@
         history.replaceState(null, '', window.location.pathname);
     });
 
+    $('options-toggle').addEventListener('click', () => {
+        const open = $('viewer-toggles').classList.toggle('open');
+        $('options-toggle').setAttribute('aria-expanded', String(open));
+    });
+
+    const closeOptions = () => {
+        $('viewer-toggles').classList.remove('open');
+        $('options-toggle').setAttribute('aria-expanded', 'false');
+    };
+
+    $('options-close').addEventListener('click', closeOptions);
+
+    document.addEventListener('click', event => {
+        if (!$('viewer-toggles').classList.contains('open')) return;
+        if (event.target.closest('#viewer-toggles, #options-toggle')) return;
+        closeOptions();
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && $('viewer-toggles').classList.contains('open')) closeOptions();
+    });
+
     $('pause-button').addEventListener('click', () => {
         state.paused = !state.paused;
         $('pause-button').textContent = state.paused ? 'Resume' : 'Pause';
@@ -649,6 +709,9 @@
         applyFontSize();
 
         $('theme-button').setAttribute('aria-pressed', String(document.documentElement.classList.contains('dark')));
+
+        // On a phone the drawer starts closed so the log gets the whole screen.
+        setSidebar(!drawerQuery.matches);
 
         const restore = (id, storageKey, defaultOn) => {
             const stored = store.get(storageKey);

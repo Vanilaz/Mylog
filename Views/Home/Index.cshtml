@@ -19,6 +19,7 @@
     </header>
 
     <div class="main-content">
+        <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
         <aside class="sidebar" id="sidebar" aria-label="Allowed folders">
             <div class="section-heading">
                 <button type="button" id="reset-root" class="root-reset" title="Return to the root folder">ROOTS</button>
@@ -84,11 +85,18 @@
                             <button id="font-dec" class="text-button" aria-label="Decrease log font size" title="Decrease font size">A-</button>
                             <button id="font-inc" class="text-button" aria-label="Increase log font size" title="Increase font size">A+</button>
                         </div>
-                        <label class="auto-scroll"><input id="errors-only" type="checkbox" /> Errors/Warns only</label>
-                        <label class="auto-scroll"><input id="show-lines" type="checkbox" checked /> Line numbers</label>
-                        <label class="auto-scroll"><input id="auto-format-json" type="checkbox" /> Auto-Format JSON</label>
-                        <label class="auto-scroll"><input id="word-wrap" type="checkbox" checked /> Word wrap</label>
-                        <label class="auto-scroll"><input id="auto-scroll" type="checkbox" checked /> Auto-scroll</label>
+                        <button id="options-toggle" class="text-button options-toggle" aria-expanded="false" aria-controls="viewer-toggles">Options</button>
+                        <div class="viewer-toggles" id="viewer-toggles">
+                            <div class="sheet-header">
+                                <span>View options</span>
+                                <button type="button" id="options-close" class="text-button">Done</button>
+                            </div>
+                            <label class="auto-scroll"><input id="errors-only" type="checkbox" /> Errors/Warns only</label>
+                            <label class="auto-scroll"><input id="show-lines" type="checkbox" checked /> Line numbers</label>
+                            <label class="auto-scroll"><input id="auto-format-json" type="checkbox" /> Auto-Format JSON</label>
+                            <label class="auto-scroll"><input id="word-wrap" type="checkbox" checked /> Word wrap</label>
+                            <label class="auto-scroll"><input id="auto-scroll" type="checkbox" checked /> Auto-scroll</label>
+                        </div>
                     </div>
                 </div>
                 <div class="content-search">
