@@ -91,13 +91,8 @@
         if ($('auto-scroll').checked) viewer.scrollTop = viewer.scrollHeight; 
     }
     function renderFiles() { const query = $('search-input').value.toLowerCase(); const visible = state.files.filter(file => (!query || file.name.toLowerCase().includes(query)) && (!$('logs-only').checked || file.extension.toLowerCase() === '.log')); visible.sort((a, b) => { const left = state.sort === 'size' ? a.size : state.sort === 'modified' ? new Date(a.lastModified) : a.name; const right = state.sort === 'size' ? b.size : state.sort === 'modified' ? new Date(b.lastModified) : b.name; return (left > right ? 1 : left < right ? -1 : 0) * (state.ascending ? 1 : -1); }); $('file-list').innerHTML = visible.map(file => `<tr><td><span class="file-name">${escapeHtml(file.name)}</span></td><td class="file-meta">${formatSize(file.size)}</td><td class="file-meta">${formatDate(file.lastModified)}</td><td class="file-meta">${escapeHtml(file.extension || 'file')}</td><td class="actions" style="text-align: right; display: flex; gap: 4px; justify-content: flex-end;"><button class="text-button" data-action="open" data-path="${escapeHtml(file.path)}">Open</button><button class="text-button" data-action="tail" data-path="${escapeHtml(file.path)}">Tail</button><a href="${window.appBasePath}/api/files/download?path=${encodeURIComponent(file.path)}" download style="text-decoration: none;"><button class="text-button">Download</button></a></td></tr>`).join(''); $('empty-state').style.display = visible.length ? 'none' : 'block'; }
-    function showLoading(text) { const overlay = $('loading-overlay');
-        if (overlay) {
-            $('loading-text').textContent = text || 'LOADING...';
-            overlay.classList.remove('hidden');
-        }
-    }
-    function hideLoading() { const overlay = $("loading-overlay"); if (overlay) overlay.classList.add("hidden"); }
+    function showLoading(text) { if (text === "LOADING DIRECTORY...") { $("file-list").innerHTML = Array(5).fill("<tr><td colspan=\"5\"><div class=\"skeleton-line\"></div></td></tr>").join(""); } else { $("log-viewer").innerHTML = Array(8).fill(0).map((_, i) => `<div class="skeleton-line" style="width: ${40 + Math.random() * 40}%"></div>`).join(""); } }
+    function hideLoading() { if ($("file-list").innerHTML.includes("skeleton-line")) $("file-list").innerHTML = "<tr><td colspan=\"5\" style=\"text-align:center; color:var(--error);\">Failed to load.</td></tr>"; if ($("log-viewer").innerHTML.includes("skeleton-line")) $("log-viewer").innerHTML = "Failed to load."; }
     async function initTree() {
         try {
             const response = await fetch(`${window.appBasePath}/api/files/list`);
@@ -221,6 +216,7 @@
 })();
 
 document.getElementById('toggle-sidebar').addEventListener('click', () => { document.querySelector('.main-content').classList.toggle('sidebar-collapsed'); });
+
 
 
 
