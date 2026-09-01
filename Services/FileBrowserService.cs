@@ -14,7 +14,12 @@ public sealed class FileBrowserService : IFileBrowserService
     private const int MaxSearchResults = 2000;
     private const int MaxSearchContext = 50;
 
+    private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan ReachableCacheDuration = TimeSpan.FromSeconds(30);
+
     private readonly ILogger<FileBrowserService> _logger;
+    private volatile IReadOnlyList<string>? _reachableRoots;
+    private DateTime _reachableRootsAt;
 
     public FileBrowserService(IOptions<FileBrowserOptions> options, IHostEnvironment environment, ILogger<FileBrowserService> logger)
     {
@@ -32,12 +37,17 @@ public sealed class FileBrowserService : IFileBrowserService
     public IReadOnlyList<string> AllowedRoots { get; }
 
     /// <summary>
-    /// The configured roots themselves. The UI needs these to offer every allowed
-    /// location: listing with no path only ever reaches inside the first root.
+    /// The configured roots that actually resolve on this host. The UI needs these
+    /// to offer every allowed location - listing with no path only ever reaches
+    /// inside the first root - but AllowedFolders is a shared list covering several
+    /// machines, so entries that do not exist here are left out rather than shown
+    /// as folders that fail the moment they are opened.
     /// </summary>
-    public IReadOnlyList<FolderItemDto> GetRoots() => AllowedRoots
-        .Select(root => new FolderItemDto(DescribeRoot(root), root))
-        .ToArray();
+    public async Task<IReadOnlyList<FolderItemDto>> GetRootsAsync(CancellationToken cancellationToken)
+    {
+        var reachable = await GetReachableRootsAsync(cancellationToken);
+        return reachable.Select(root => new FolderItemDto(DescribeRoot(root), root)).ToArray();
+    }
 
     private static string DescribeRoot(string root)
     {
@@ -46,9 +56,51 @@ public sealed class FileBrowserService : IFileBrowserService
         return string.IsNullOrEmpty(name) ? root : name;
     }
 
-    public Task<FileListDto> ListAsync(string? path, CancellationToken cancellationToken)
+    /// <summary>
+    /// Probes every root, cached briefly. Probes run in parallel and are bounded by
+    /// a timeout because Directory.Exists on an unreachable UNC share blocks for the
+    /// SMB timeout, and the configured list contains several shares - serial probing
+    /// would stall the sidebar for as long as it takes them all to give up.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> GetReachableRootsAsync(CancellationToken cancellationToken)
+    {
+        var cached = _reachableRoots;
+        if (cached is not null && DateTime.UtcNow - _reachableRootsAt < ReachableCacheDuration) return cached;
+
+        var probes = AllowedRoots.Select(async root => (root, reachable: await IsReachableAsync(root)));
+        var results = await Task.WhenAll(probes);
+
+        var reachable = results.Where(result => result.reachable).Select(result => result.root).ToArray();
+        if (reachable.Length == 0) _logger.LogWarning("None of the configured AllowedFolders are reachable from this host.");
+
+        _reachableRoots = reachable;
+        _reachableRootsAt = DateTime.UtcNow;
+        return reachable;
+    }
+
+    private async Task<bool> IsReachableAsync(string root)
+    {
+        // Directory.Exists is synchronous and not cancellable, so race it against a
+        // timer. A stuck probe finishes on its own later; we just stop waiting.
+        var probe = Task.Run(() =>
+        {
+            try { return Directory.Exists(root); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
+        });
+
+        if (await Task.WhenAny(probe, Task.Delay(ProbeTimeout)) == probe) return probe.Result;
+
+        _logger.LogWarning("Timed out checking whether root {Root} is reachable.", root);
+        return false;
+    }
+
+    public async Task<FileListDto> ListAsync(string? path, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(path)) path = await GetDefaultRootAsync(cancellationToken);
         var directory = GetSafeDirectoryPath(path);
 
         string? parentPath = null;
@@ -69,7 +121,7 @@ public sealed class FileBrowserService : IFileBrowserService
             .Select(item => new FileItemDto(item.Name, item.FullName, item.Length, item.LastWriteTime, item.Extension))
             .ToArray();
 
-        return Task.FromResult(new FileListDto(folders, files, directory, parentPath));
+        return new FileListDto(folders, files, directory, parentPath);
     }
 
     // A single unreadable subdirectory must not fail the whole listing.
@@ -226,33 +278,19 @@ public sealed class FileBrowserService : IFileBrowserService
 
     private string GetSafeDirectoryPath(string? path)
     {
-        var safePath = GetSafePath(string.IsNullOrWhiteSpace(path) ? GetDefaultRoot() : path);
+        var safePath = GetSafePath(string.IsNullOrWhiteSpace(path) ? AllowedRoots[0] : path);
         if (!Directory.Exists(safePath)) throw new DirectoryNotFoundException("Folder was not found.");
         return safePath;
     }
 
     /// <summary>
-    /// The landing folder. AllowedFolders is a shared list covering several machines,
-    /// so the first entry often does not exist on this one; pick the first root that
-    /// actually resolves rather than greeting the user with "Folder was not found".
+    /// The landing folder: the first root that actually resolves here, so a machine
+    /// where entry one is missing is not greeted with "Folder was not found".
     /// </summary>
-    private string GetDefaultRoot()
+    private async Task<string> GetDefaultRootAsync(CancellationToken cancellationToken)
     {
-        foreach (var root in AllowedRoots)
-        {
-            try
-            {
-                if (Directory.Exists(root)) return root;
-            }
-            catch (IOException exception)
-            {
-                // An unreachable network share must not stop us trying the next root.
-                _logger.LogDebug(exception, "Root {Root} is not reachable", root);
-            }
-        }
-
-        _logger.LogWarning("None of the configured AllowedFolders exist on this host.");
-        return AllowedRoots[0];
+        var reachable = await GetReachableRootsAsync(cancellationToken);
+        return reachable.Count > 0 ? reachable[0] : AllowedRoots[0];
     }
 
     private bool IsInsideAllowedRoot(string fullPath)

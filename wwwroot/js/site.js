@@ -248,6 +248,12 @@
             const roots = await response.json();
             $('root-count').textContent = roots.length;
             $('folder-tree').textContent = '';
+            if (!roots.length) {
+                $('folder-tree').innerHTML =
+                    '<p class="tree-empty">None of the configured folders are reachable from this machine. '
+                  + 'Check AllowedFolders in appsettings.json.</p>';
+                return;
+            }
             renderTreeNodes($('folder-tree'), roots);
         } catch (error) {
             console.error('Failed to init tree', error);

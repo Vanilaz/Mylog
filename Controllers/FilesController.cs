@@ -11,9 +11,9 @@ public sealed class FilesController : ControllerBase
 
     public FilesController(IFileBrowserService files) => _files = files;
 
-    /// <summary>The configured roots, so the browser can reach every allowed folder.</summary>
+    /// <summary>The configured roots that exist here, so the browser can reach every usable folder.</summary>
     [HttpGet("roots")]
-    public IActionResult Roots() => Ok(_files.GetRoots());
+    public async Task<IActionResult> Roots(CancellationToken cancellationToken) => Ok(await _files.GetRootsAsync(cancellationToken));
 
     [HttpGet("list")]
     public async Task<IActionResult> List([FromQuery] string? path, CancellationToken cancellationToken)
