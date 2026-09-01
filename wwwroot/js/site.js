@@ -11,7 +11,17 @@
     const escapeHtml = text => text.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
     const formatSize = bytes => bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
     const formatDate = value => new Date(value).toLocaleString('sv-SE').replace('T', ' ');
-    const classify = line => /\b(ERROR|FATAL|EXCEPTION|FAIL)\b/i.test(line) ? 'error' : /\b(WARN|WARNING)\b/i.test(line) ? 'warn' : /\b(INFO)\b/i.test(line) ? 'info' : '';
+    const classify = line => {
+        const lvlMatch = line.match(/\b(ERROR|FATAL|ERR|FTL|WARN|WARNING|WRN|INFO|INF)\b/);
+        if (lvlMatch) {
+            const lvl = lvlMatch[1];
+            if (['ERROR', 'FATAL', 'ERR', 'FTL'].includes(lvl)) return 'error';
+            if (['WARN', 'WARNING', 'WRN'].includes(lvl)) return 'warn';
+            if (['INFO', 'INF'].includes(lvl)) return 'info';
+        }
+        if (/\b(EXCEPTION|FAIL)\b/i.test(line)) return 'error';
+        return '';
+    };
     let customRe = null;
     function updateCustomRe() {
         const kws = $('custom-highlight').value.split(',').map(k => k.trim()).filter(k => k);

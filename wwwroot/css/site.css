@@ -11,7 +11,7 @@
   --accent: #2563eb;
   --teal: #0f766e;
   --viewer: #ffffff;
-  --code: #334155;
+  --code: #CBD5E1;
   --error: #FF0000;
   --warn: #FFFF00;
   --info: #FFFFFF;
@@ -133,7 +133,7 @@ body.dark .log-viewer { background: #020617; }
 .log-viewer .info { color: var(--info); }
 .custom-hl { background-color: var(--hl-border); color: #000; border-radius: 3px; padding: 0 4px; font-weight: 600; }
 
-.line-number { display: inline-block; width: 48px; margin-right: 12px; color: #475569; user-select: none; text-align: right; text-indent: 0; border-right: 1px solid #334155; padding-right: 8px; }
+.line-number { display: inline-block; width: 48px; margin-right: 12px; color: #64748B; user-select: none; text-align: right; text-indent: 0; border-right: 1px solid #334155; padding-right: 8px; }
 .line-number:hover { color: #94A3B8; }
 
 .loading-overlay { position: absolute; inset: 0; background: rgba(2, 6, 23, 0.7); backdrop-filter: blur(4px); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; color: var(--accent); transition: opacity 0.3s; border-radius: 8px; }
@@ -178,6 +178,7 @@ body.dark .status-pill.live { color: #000; border-color: var(--accent); backgrou
 .skeleton-line { height: 16px; background: #E2E8F0; margin-bottom: 8px; border-radius: 4px; animation: pulse 1.5s infinite ease-in-out; }
 body.dark .skeleton-line { background: #1E293B; }
 @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
 
 
 
