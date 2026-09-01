@@ -7,7 +7,7 @@ namespace MyLog.Services;
 
 public sealed class FileBrowserService : IFileBrowserService
 {
-    private const int ContentLimit = 4 * 1024 * 1024;
+    private const int ContentLimit = 100 * 1024 * 1024; // 100MB
     private readonly ILogger<FileBrowserService> _logger;
 
     public FileBrowserService(IOptions<FileBrowserOptions> options, IHostEnvironment environment, ILogger<FileBrowserService> logger)
