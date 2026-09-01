@@ -13,8 +13,8 @@
   --viewer: #ffffff;
   --code: #334155;
   --error: #FF0000;
-  --warn: #D4AF37;
-  --info: #000000;
+  --warn: #FFFF00;
+  --info: #FFFFFF;
   --hl-bg: rgba(234, 179, 8, 0.2);
   --hl-border: #EAB308;
 }
@@ -178,6 +178,7 @@ body.dark .status-pill.live { color: #000; border-color: var(--accent); backgrou
 .skeleton-line { height: 16px; background: #E2E8F0; margin-bottom: 8px; border-radius: 4px; animation: pulse 1.5s infinite ease-in-out; }
 body.dark .skeleton-line { background: #1E293B; }
 @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
 
 
 
