@@ -1,91 +1,4 @@
-(() => {
-    const escapeRegExp = string => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const state = { path: null, selectedFile: null, files: [], sort: 'name', ascending: true, connection: null, paused: false, lineCount: 0, lastSearchData: null, fontSize: parseInt(localStorage.getItem('fontSize')) || 12 };
-    if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark');
-    if (localStorage.getItem('autoFormatJson') === 'true') { document.addEventListener('DOMContentLoaded', () => { const afj = document.getElementById('auto-format-json'); if (afj) afj.checked = true; }); }
-    if (localStorage.getItem('wordWrap') === 'false') { document.addEventListener('DOMContentLoaded', () => { const ww = document.getElementById('word-wrap'); if (ww) ww.checked = false; document.getElementById('log-viewer').classList.add('nowrap'); }); }
-    if (localStorage.getItem('showLines') === 'false') { document.addEventListener('DOMContentLoaded', () => { const sl = document.getElementById('show-lines'); if (sl) sl.checked = false; document.getElementById('log-viewer').classList.remove('show-lines'); }); }
-    if (localStorage.getItem('errorsOnly') === 'true') { document.addEventListener('DOMContentLoaded', () => { const eo = document.getElementById('errors-only'); if (eo) eo.checked = true; document.getElementById('log-viewer').classList.add('errors-only-mode'); }); }
-    document.addEventListener('DOMContentLoaded', () => { document.body.style.setProperty('--log-font-size', state.fontSize + 'px'); });
-    const $ = id => document.getElementById(id);
-    const escapeHtml = text => text.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
-    const formatSize = bytes => bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
-    const formatDate = value => new Date(value).toLocaleString('sv-SE').replace('T', ' ');
-    const classify = line => /\b(ERROR|FATAL|EXCEPTION|FAIL)\b/i.test(line) ? 'error' : /\b(WARN|WARNING)\b/i.test(line) ? 'warn' : /\b(INFO)\b/i.test(line) ? 'info' : '';
-    let customRe = null;
-    function updateCustomRe() {
-        const kws = $('custom-highlight').value.split(',').map(k => k.trim()).filter(k => k);
-        customRe = kws.length > 0 ? new RegExp(`(${kws.map(escapeRegExp).join('|')})`, 'gi') : null;
-    }
-    function applyCustomHighlights(text) {
-        if (!customRe) return text;
-        let result = '';
-        let lastIdx = 0;
-        text.replace(customRe, (m, ...a) => {
-            const off = a[a.length - 2];
-            result += text.slice(lastIdx, off) + `<span class="custom-hl">${m}</span>`;
-            lastIdx = off + m.length;
-            return m;
-        });
-        return result + text.slice(lastIdx);
-    }
-    function highlightMatches(line, query, regexMode) {
-        let searchRe = null;
-        if (query) {
-            try { searchRe = new RegExp(regexMode ? query : escapeRegExp(query), 'gi'); } 
-            catch { searchRe = null; }
-        }
-        if (!searchRe && !customRe) return escapeHtml(line);
-        let result = '';
-        let lastIdx = 0;
-        if (searchRe) {
-            let chunks = [];
-            line.replace(searchRe, (match, ...args) => {
-                const offset = args[args.length - 2];
-                chunks.push({ text: line.slice(lastIdx, offset), isMark: false });
-                chunks.push({ text: match, isMark: true });
-                lastIdx = offset + match.length;
-                return match;
-            });
-            chunks.push({ text: line.slice(lastIdx), isMark: false });
-            for (const chunk of chunks) {
-                if (chunk.isMark) {
-                    result += `<mark>${applyCustomHighlights(escapeHtml(chunk.text))}</mark>`;
-                } else {
-                    result += applyCustomHighlights(escapeHtml(chunk.text));
-                }
-            }
-        } else if (customRe) {
-            result = applyCustomHighlights(escapeHtml(line));
-        }
-        return result;
-    }
-    const tryFormatJson = (text) => {
-        if (!$('auto-format-json') || !$('auto-format-json').checked) return text;
-        let start = text.indexOf('{'); let end = text.lastIndexOf('}');
-        if (start !== -1 && end > start) {
-            try { let parsed = JSON.parse(text.substring(start, end + 1)); return text.substring(0, start) + '\n' + JSON.stringify(parsed, null, 2) + '\n' + text.substring(end + 1); } catch(e) {}
-        }
-        start = text.indexOf('['); end = text.lastIndexOf(']');
-        if (start !== -1 && end > start) {
-            try { let parsed = JSON.parse(text.substring(start, end + 1)); return text.substring(0, start) + '\n' + JSON.stringify(parsed, null, 2) + '\n' + text.substring(end + 1); } catch(e) {}
-        }
-        return text;
-    };
-    function renderOutput(content, append = false) {
-        const viewer = $('log-viewer');
-        if (!append) { viewer.innerHTML = ''; state.lineCount = 0; $('export-search-button').style.display = 'none'; state.lastSearchData = null; }
-        if (!content && !append) return;
-        let newLines = content.split('\n');
-        if (newLines.length > 0 && newLines[newLines.length - 1] === '') newLines.pop();
-        if (!append && newLines.length > 2000) {
-            newLines = newLines.slice(-2000);
-            viewer.insertAdjacentHTML('beforeend', '<div style="color: var(--warn); padding: 8px; text-align: center; border-bottom: 1px solid #334155; margin-bottom: 10px;">[ Showing last 2000 lines for performance. Download file to see full content. ]</div>\n');
-        }
-        const html = newLines.map(line => {
-            state.lineCount++;
-            return `<span class="log-line" id="L${state.lineCount}"><a href="#L${state.lineCount}" class="line-number" onclick="highlightLine(${state.lineCount})">${state.lineCount}</a><span class="${classify(line)}">${applyCustomHighlights(escapeHtml(tryFormatJson(line)))}</span></span>`;
-(() => {
+﻿(() => {
     const escapeRegExp = string => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const state = { path: null, selectedFile: null, files: [], sort: 'name', ascending: true, connection: null, paused: false, lineCount: 0, lastSearchData: null, fontSize: parseInt(localStorage.getItem('fontSize')) || 12 };
     if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark');
@@ -178,17 +91,13 @@
         if ($('auto-scroll').checked) viewer.scrollTop = viewer.scrollHeight; 
     }
     function renderFiles() { const query = $('search-input').value.toLowerCase(); const visible = state.files.filter(file => (!query || file.name.toLowerCase().includes(query)) && (!$('logs-only').checked || file.extension.toLowerCase() === '.log')); visible.sort((a, b) => { const left = state.sort === 'size' ? a.size : state.sort === 'modified' ? new Date(a.lastModified) : a.name; const right = state.sort === 'size' ? b.size : state.sort === 'modified' ? new Date(b.lastModified) : b.name; return (left > right ? 1 : left < right ? -1 : 0) * (state.ascending ? 1 : -1); }); $('file-list').innerHTML = visible.map(file => `<tr><td><span class="file-name">${escapeHtml(file.name)}</span></td><td class="file-meta">${formatSize(file.size)}</td><td class="file-meta">${formatDate(file.lastModified)}</td><td class="file-meta">${escapeHtml(file.extension || 'file')}</td><td class="actions" style="text-align: right; display: flex; gap: 4px; justify-content: flex-end;"><button class="text-button" data-action="open" data-path="${escapeHtml(file.path)}">Open</button><button class="text-button" data-action="tail" data-path="${escapeHtml(file.path)}">Tail</button><a href="${window.appBasePath}/api/files/download?path=${encodeURIComponent(file.path)}" download style="text-decoration: none;"><button class="text-button">Download</button></a></td></tr>`).join(''); $('empty-state').style.display = visible.length ? 'none' : 'block'; }
-    function showLoading(text) {
-        const overlay = $('loading-overlay');
+    function showLoading(text) { const overlay = $('loading-overlay');
         if (overlay) {
             $('loading-text').textContent = text || 'LOADING...';
             overlay.classList.remove('hidden');
         }
     }
-    function hideLoading() {
-        const overlay = $('loading-overlay');
-        if (overlay) overlay.classList.add('hidden');
-    }
+    function hideLoading() { const overlay = $("loading-overlay"); if (overlay) overlay.classList.add("hidden"); }
     async function initTree() {
         try {
             const response = await fetch(`${window.appBasePath}/api/files/list`);
@@ -312,5 +221,6 @@
 })();
 
 document.getElementById('toggle-sidebar').addEventListener('click', () => { document.querySelector('.main-content').classList.toggle('sidebar-collapsed'); });
+
 
 
