@@ -90,7 +90,7 @@
         else viewer.insertAdjacentHTML('beforeend', html);
         if ($('auto-scroll').checked) viewer.scrollTop = viewer.scrollHeight; 
     }
-    function renderFiles() { const query = $('search-input').value.toLowerCase(); const visible = state.files.filter(file => (!query || file.name.toLowerCase().includes(query)) && (!$('logs-only').checked || file.extension.toLowerCase() === '.log')); visible.sort((a, b) => { const left = state.sort === 'size' ? a.size : state.sort === 'modified' ? new Date(a.lastModified) : a.name; const right = state.sort === 'size' ? b.size : state.sort === 'modified' ? new Date(b.lastModified) : b.name; return (left > right ? 1 : left < right ? -1 : 0) * (state.ascending ? 1 : -1); }); $('file-list').innerHTML = visible.map(file => `<tr><td><span class="file-name">${escapeHtml(file.name)}</span></td><td class="file-meta">${formatSize(file.size)}</td><td class="file-meta">${formatDate(file.lastModified)}</td><td class="file-meta">${escapeHtml(file.extension || 'file')}</td><td class="actions"><button data-action="open" data-path="${escapeHtml(file.path)}">Open</button><button data-action="tail" data-path="${escapeHtml(file.path)}">Tail</button><a href="${window.appBasePath}/api/files/download?path=${encodeURIComponent(file.path)}" download><button>Download</button></a></td></tr>`).join(''); $('empty-state').style.display = visible.length ? 'none' : 'block'; }
+    function renderFiles() { const query = $('search-input').value.toLowerCase(); const visible = state.files.filter(file => (!query || file.name.toLowerCase().includes(query)) && (!$('logs-only').checked || file.extension.toLowerCase() === '.log')); visible.sort((a, b) => { const left = state.sort === 'size' ? a.size : state.sort === 'modified' ? new Date(a.lastModified) : a.name; const right = state.sort === 'size' ? b.size : state.sort === 'modified' ? new Date(b.lastModified) : b.name; return (left > right ? 1 : left < right ? -1 : 0) * (state.ascending ? 1 : -1); }); $('file-list').innerHTML = visible.map(file => `<tr><td><span class="file-name">${escapeHtml(file.name)}</span></td><td class="file-meta">${formatSize(file.size)}</td><td class="file-meta">${formatDate(file.lastModified)}</td><td class="file-meta">${escapeHtml(file.extension || 'file')}</td><td class="actions" style="text-align: right; display: flex; gap: 4px; justify-content: flex-end;"><button class="text-button" data-action="open" data-path="${escapeHtml(file.path)}">Open</button><button class="text-button" data-action="tail" data-path="${escapeHtml(file.path)}">Tail</button><a href="${window.appBasePath}/api/files/download?path=${encodeURIComponent(file.path)}" download style="text-decoration: none;"><button class="text-button">Download</button></a></td></tr>`).join(''); $('empty-state').style.display = visible.length ? 'none' : 'block'; }
     let loadingCount = 0;
     function showLoading(text) {
         loadingCount++;
@@ -107,7 +107,121 @@
             if (overlay) overlay.classList.add('hidden');
         }
     }
-    async function loadFolder(path) { document.getElementById('file-panel').style.display = 'flex'; document.getElementById('viewer-panel').style.display = 'none'; showLoading('LOADING DIRECTORY...'); try { const response = await fetch(`${window.appBasePath}/api/files/list${path ? `?path=${encodeURIComponent(path)}` : ''}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to load folder.'); state.path = data.currentPath; state.files = data.files; $('current-path').value = data.currentPath; $('root-count').textContent = data.folders.length; let html = data.parentPath ? `<button class="folder" style="font-weight: 600; font-style: italic; color: var(--muted);" data-folder="${escapeHtml(data.parentPath)}">&#11014; [ Go Up ]</button>` : ''; html += data.folders.map(folder => `<button class="folder ${folder.path === state.path ? 'active' : ''}" data-folder="${escapeHtml(folder.path)}">${escapeHtml(folder.name)}</button>`).join(''); $('folder-tree').innerHTML = html || '<span class="file-meta">No subfolders</span>'; renderFiles(); } finally { hideLoading(); } }
+        async function initTree() {
+        try {
+            const response = await fetch(${window.appBasePath}/api/files/list);
+            const data = await response.json();
+            root-count.textContent = data.folders.length;
+            renderTreeNodes(folder-tree, data.folders);
+        } catch (e) {
+            console.error('Failed to init tree', e);
+        }
+    }
+    function renderTreeNodes(container, folders) {
+        if (!folders || folders.length === 0) return;
+        const ul = document.createElement('div');
+        ul.className = 'tree-level';
+        ul.style.paddingLeft = container.id === 'folder-tree' ? '0' : '15px';
+        folders.forEach(folder => {
+            const node = document.createElement('div');
+            node.className = 'tree-node';
+            node.innerHTML = 
+                <div style="display: flex; align-items: center; padding: 4px 0; cursor: pointer;">
+                    <span class="tree-toggle" data-tree-path="+escapeHtml(folder.path)+" style="width: 20px; text-align: center; color: var(--muted); font-family: monospace;">&#9654;</span>
+                    <span class="tree-label" data-folder="+escapeHtml(folder.path)+" style="color: var(--ink); flex: 1; user-select: none;">+escapeHtml(folder.name)+</span>
+                </div>
+                <div class="tree-children" style="display: none;"></div>
+            ;
+            ul.appendChild(node);
+        });
+        container.appendChild(ul);
+    }
+    document.addEventListener('click', async event => {
+        if (event.target.classList.contains('tree-toggle')) {
+            const btn = event.target;
+            const path = btn.dataset.treePath;
+            const childrenDiv = btn.parentElement.nextElementSibling;
+            if (btn.classList.contains('expanded')) {
+                btn.classList.remove('expanded');
+                btn.innerHTML = '&#9654;'; // right arrow
+                childrenDiv.style.display = 'none';
+            } else {
+                if (childrenDiv.innerHTML === '') {
+                    // Fetch children
+                    try {
+                        btn.innerHTML = '&#8987;'; // hourglass
+                        const response = await fetch(${window.appBasePath}/api/files/list?path= + encodeURIComponent(path));
+                        const data = await response.json();
+                        if (data.folders.length > 0) {
+                            renderTreeNodes(childrenDiv, data.folders);
+                        } else {
+                            childrenDiv.innerHTML = '<div style="padding-left:15px; color:var(--muted); font-size:11px;">(Empty)</div>';
+                        }
+                    } catch(e) {
+                        childrenDiv.innerHTML = '<div style="color:red;">Error</div>';
+                    }
+                }
+                btn.classList.add('expanded');
+                btn.innerHTML = '&#9660;'; // down arrow
+                childrenDiv.style.display = 'block';
+            }
+        }
+    });
+    async function initTree() {
+        try {
+            const response = await fetch(`${window.appBasePath}/api/files/list`);
+            const data = await response.json();
+            $('root-count').textContent = data.folders.length;
+            $('folder-tree').innerHTML = '';
+            renderTreeNodes($('folder-tree'), data.folders);
+        } catch (e) { console.error('Failed to init tree', e); }
+    }
+    function renderTreeNodes(container, folders) {
+        if (!folders || folders.length === 0) return;
+        const ul = document.createElement('div');
+        ul.className = 'tree-level';
+        ul.style.paddingLeft = container.id === 'folder-tree' ? '0' : '15px';
+        folders.forEach(folder => {
+            const node = document.createElement('div');
+            node.className = 'tree-node';
+            node.innerHTML = `
+                <div style="display: flex; align-items: center; padding: 4px 0; cursor: pointer;">
+                    <span class="tree-toggle" data-tree-path="${escapeHtml(folder.path)}" style="width: 20px; text-align: center; color: var(--muted); font-family: monospace;">&#9654;</span>
+                    <span class="tree-label" data-folder="${escapeHtml(folder.path)}" style="color: var(--ink); flex: 1; user-select: none;">${escapeHtml(folder.name)}</span>
+                </div>
+                <div class="tree-children" style="display: none;"></div>
+            `;
+            ul.appendChild(node);
+        });
+        container.appendChild(ul);
+    }
+    document.addEventListener('click', async event => {
+        if (event.target.classList.contains('tree-toggle')) {
+            const btn = event.target;
+            const path = btn.dataset.treePath;
+            const childrenDiv = btn.parentElement.nextElementSibling;
+            if (btn.classList.contains('expanded')) {
+                btn.classList.remove('expanded');
+                btn.innerHTML = '&#9654;';
+                childrenDiv.style.display = 'none';
+            } else {
+                if (childrenDiv.innerHTML === '') {
+                    try {
+                        btn.innerHTML = '&#8987;';
+                        const response = await fetch(`${window.appBasePath}/api/files/list?path=` + encodeURIComponent(path));
+                        const data = await response.json();
+                        if (data.folders.length > 0) renderTreeNodes(childrenDiv, data.folders);
+                        else childrenDiv.innerHTML = '<div style="padding-left:15px; color:var(--muted); font-size:11px;">(Empty)</div>';
+                    } catch(e) { childrenDiv.innerHTML = '<div style="color:red;">Error</div>'; }
+                }
+                btn.classList.add('expanded');
+                btn.innerHTML = '&#9660;';
+                childrenDiv.style.display = 'block';
+            }
+        }
+    });
+
+    async function loadFolder(path) { document.getElementById('file-panel').style.display = 'flex'; document.getElementById('viewer-panel').style.display = 'none'; showLoading('LOADING DIRECTORY...'); try { const response = await fetch(`${window.appBasePath}/api/files/list${path ? `?path=${encodeURIComponent(path)}` : ''}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to load folder.'); state.path = data.currentPath; state.files = data.files; $('current-path').value = data.currentPath; renderFiles(); } finally { hideLoading(); } }
     async function openFile(path) { document.getElementById('file-panel').style.display = 'none'; document.getElementById('viewer-panel').style.display = 'flex'; showLoading('OPENING FILE...'); try { state.selectedFile = path; const response = await fetch(`${window.appBasePath}/api/files/content?path=${encodeURIComponent(path)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to open file.'); $('viewer-title').textContent = data.fileName; renderOutput(data.content); $('connection-status').textContent = data.isTruncated ? 'PARTIAL READ' : 'READY'; $('pause-button').disabled = true; } finally { hideLoading(); } }
     async function tailFile(path) { document.getElementById('file-panel').style.display = 'none'; document.getElementById('viewer-panel').style.display = 'flex'; showLoading('CONNECTING LIVE TAIL...'); try { state.selectedFile = path; if (typeof signalR === 'undefined') throw new Error('SignalR client could not load. Check network access and refresh the page.'); if (!state.connection) { state.connection = new signalR.HubConnectionBuilder().withUrl(`${window.appBasePath}/hubs/log`).withAutomaticReconnect().build(); state.connection.on('LogAppended', text => { if (!state.paused) renderOutput(text, true); }); } if (state.connection.state === 'Disconnected') { await state.connection.start(); } await state.connection.invoke('Subscribe', path); state.paused = false; $('viewer-title').textContent = path.split(/[\\/]/).pop(); $('connection-status').textContent = 'LIVE'; $('connection-status').classList.add('live'); $('pause-button').disabled = false; $('pause-button').textContent = 'Pause'; renderOutput(''); } finally { hideLoading(); } }
     async function searchContent() { 
@@ -163,8 +277,9 @@
         const path = params.get('path');
         if (path) { openFile(path).then(() => { if (window.location.hash.startsWith('#L')) { const num = window.location.hash.substring(2); window.highlightLine(num); const el = document.getElementById('L' + num); if (el) el.scrollIntoView({ block: 'center' }); } }); }
     }
-    document.querySelectorAll('th[data-sort]').forEach(header => header.addEventListener('click', () => { state.ascending = state.sort === header.dataset.sort ? !state.ascending : true; state.sort = header.dataset.sort; renderFiles(); })); loadFolder().catch(error => renderOutput(`ERROR: ${error.message}`));
+    document.querySelectorAll('th[data-sort]').forEach(header => header.addEventListener('click', () => { state.ascending = state.sort === header.dataset.sort ? !state.ascending : true; state.sort = header.dataset.sort; renderFiles(); })); initTree(); loadFolder().catch(error => renderOutput(`ERROR: ${error.message}`));
     checkUrlParams();
 })();
 
 document.getElementById('toggle-sidebar').addEventListener('click', () => { document.querySelector('.workspace').classList.toggle('sidebar-collapsed'); });
+
