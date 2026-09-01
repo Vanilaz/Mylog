@@ -43,15 +43,4 @@ public sealed class FilesController : ControllerBase
         catch (Exception exception) when (exception is UnauthorizedAccessException or FileNotFoundException or IOException or ArgumentException) { return BadRequest(new { error = exception.Message }); }
     }
 
-    [HttpPost("truncate")]
-    public IActionResult Truncate([FromQuery] string path)
-    {
-        try 
-        { 
-            var safePath = _files.GetSafeFilePath(path);
-            System.IO.File.WriteAllText(safePath, string.Empty);
-            return Ok();
-        }
-        catch (Exception exception) when (exception is UnauthorizedAccessException or FileNotFoundException or IOException) { return BadRequest(new { error = exception.Message }); }
-    }
 }
