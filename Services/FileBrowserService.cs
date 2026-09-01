@@ -69,15 +69,13 @@ public sealed class FileBrowserService : IFileBrowserService
         }
 
         using var reader = new StreamReader(stream);
-        if (isTruncated) await reader.ReadLineAsync(cancellationToken);
-
-        var ringBuffer = new Queue<string>(2000);
-        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        if (isTruncated)
         {
-            if (ringBuffer.Count >= 2000) ringBuffer.Dequeue();
-            ringBuffer.Enqueue(line);
+            // Discard the first partial line to ensure clean output
+            await reader.ReadLineAsync(cancellationToken);
         }
-        var text = string.Join("\n", ringBuffer);
+
+        var text = await reader.ReadToEndAsync(cancellationToken);
         return new FileContentDto(info.Name, info.Length, info.LastWriteTime, text, isTruncated);
     }
 
@@ -109,7 +107,9 @@ public sealed class FileBrowserService : IFileBrowserService
         int afterContextRemaining = 0;
         var addedLineNumbers = new HashSet<int>();
 
-        while (await reader.ReadLineAsync(cancellationToken) is { } line) { if (results.Count > 2000) break; lineNumber++;
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            lineNumber++;
             bool isMatch = matcher?.IsMatch(line) == true || matcher is null && line.Contains(query, StringComparison.OrdinalIgnoreCase);
             var currentDto = new FileSearchResultDto(lineNumber, line, isMatch);
 
