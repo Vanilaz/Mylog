@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>@ViewData["Title"] - MyLog</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    @* Fonts load asynchronously: on an isolated network fonts.googleapis.com may hang,
+       and a blocking stylesheet would hold up first paint. The CSS declares full
+       fallback stacks, so the UI is correct either way. *@
+    <link rel="stylesheet" media="print" onload="this.media='all';this.onload=null"
+          href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&amp;family=Source+Sans+3:wght@400;500;600&amp;family=Fira+Code:wght@400;500&amp;display=swap" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&amp;family=Source+Sans+3:wght@400;500;600&amp;family=Fira+Code:wght@400;500&amp;display=swap" /></noscript>
+    <link rel="icon" type="image/x-icon" href="~/favicon.ico" />
+    <script>
+        // Apply the stored theme before first paint so the page never flashes the wrong palette.
+        (() => {
+            try {
+                const stored = localStorage.getItem('theme');
+                const dark = stored ? stored === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+                if (dark) document.documentElement.classList.add('dark');
+            } catch { /* storage unavailable (private mode) - fall back to light */ }
+        })();
+    </script>
+</head>
+<body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <main id="main-content" role="main">
+        @RenderBody()
+    </main>
+
+    <script src="~/js/signalr.min.js" asp-append-version="true"></script>
+    <script>
+        window.appBasePath = '@Url.Content("~")';
+        if (window.appBasePath === '/') window.appBasePath = '';
+    </script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

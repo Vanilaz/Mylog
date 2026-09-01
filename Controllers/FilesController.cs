@@ -11,18 +11,22 @@ public sealed class FilesController : ControllerBase
 
     public FilesController(IFileBrowserService files) => _files = files;
 
+    /// <summary>The configured roots, so the browser can reach every allowed folder.</summary>
+    [HttpGet("roots")]
+    public IActionResult Roots() => Ok(_files.GetRoots());
+
     [HttpGet("list")]
     public async Task<IActionResult> List([FromQuery] string? path, CancellationToken cancellationToken)
     {
         try { return Ok(await _files.ListAsync(path, cancellationToken)); }
-        catch (Exception exception) when (exception is UnauthorizedAccessException or DirectoryNotFoundException) { return BadRequest(new { error = exception.Message }); }
+        catch (Exception exception) when (IsClientError(exception)) { return BadRequest(new { error = exception.Message }); }
     }
 
     [HttpGet("content")]
     public async Task<IActionResult> Content([FromQuery] string path, CancellationToken cancellationToken)
     {
         try { return Ok(await _files.ReadContentAsync(path, cancellationToken)); }
-        catch (Exception exception) when (exception is UnauthorizedAccessException or FileNotFoundException or IOException) { return BadRequest(new { error = exception.Message }); }
+        catch (Exception exception) when (IsClientError(exception)) { return BadRequest(new { error = exception.Message }); }
     }
 
     [HttpGet("download")]
@@ -33,14 +37,27 @@ public sealed class FilesController : ControllerBase
             var safePath = _files.GetSafeFilePath(path);
             return PhysicalFile(safePath, _files.GetContentType(safePath), Path.GetFileName(safePath), enableRangeProcessing: true);
         }
-        catch (Exception exception) when (exception is UnauthorizedAccessException or FileNotFoundException or IOException) { return BadRequest(new { error = exception.Message }); }
+        catch (Exception exception) when (IsClientError(exception)) { return BadRequest(new { error = exception.Message }); }
     }
 
     [HttpGet("search")]
-    public async Task<IActionResult> Search([FromQuery] string path, [FromQuery] string query, [FromQuery] bool regex = false, [FromQuery] int context = 0, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> Search(
+        [FromQuery] string path,
+        [FromQuery] string query,
+        [FromQuery] bool regex = false,
+        [FromQuery] int context = 0,
+        CancellationToken cancellationToken = default)
     {
         try { return Ok(await _files.SearchContentAsync(path, query, regex, context, cancellationToken)); }
-        catch (Exception exception) when (exception is UnauthorizedAccessException or FileNotFoundException or IOException or ArgumentException) { return BadRequest(new { error = exception.Message }); }
+        catch (Exception exception) when (IsClientError(exception)) { return BadRequest(new { error = exception.Message }); }
     }
 
+    // A malformed path used to escape these filters and surface as a 500.
+    private static bool IsClientError(Exception exception) => exception
+        is UnauthorizedAccessException
+        or FileNotFoundException
+        or DirectoryNotFoundException
+        or IOException
+        or ArgumentException
+        or NotSupportedException;
 }

@@ -1,273 +1,698 @@
 (() => {
-    const escapeRegExp = string => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const state = { path: null, selectedFile: null, files: [], sort: 'name', ascending: true, connection: null, paused: false, lineCount: 0, lastSearchData: null, fontSize: parseInt(localStorage.getItem('fontSize')) || 12 };
-    if (localStorage.getItem('theme') === 'dark') document.body.classList.add('dark');
-    if (localStorage.getItem('autoFormatJson') === 'true') { document.addEventListener('DOMContentLoaded', () => { const afj = document.getElementById('auto-format-json'); if (afj) afj.checked = true; }); }
-    if (localStorage.getItem('wordWrap') === 'false') { document.addEventListener('DOMContentLoaded', () => { const ww = document.getElementById('word-wrap'); if (ww) ww.checked = false; document.getElementById('log-viewer').classList.add('nowrap'); }); }
-    if (localStorage.getItem('showLines') === 'false') { document.addEventListener('DOMContentLoaded', () => { const sl = document.getElementById('show-lines'); if (sl) sl.checked = false; document.getElementById('log-viewer').classList.remove('show-lines'); }); }
-    if (localStorage.getItem('errorsOnly') === 'true') { document.addEventListener('DOMContentLoaded', () => { const eo = document.getElementById('errors-only'); if (eo) eo.checked = true; document.getElementById('log-viewer').classList.add('errors-only-mode'); }); }
-    document.addEventListener('DOMContentLoaded', () => { document.body.style.setProperty('--log-font-size', state.fontSize + 'px'); });
+    'use strict';
+
     const $ = id => document.getElementById(id);
-    const escapeHtml = text => text.replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
-    const formatSize = bytes => bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
-    const formatDate = value => new Date(value).toLocaleString('sv-SE').replace('T', ' ');
+    const api = path => `${window.appBasePath || ''}${path}`;
+
+    const MAX_VIEWER_LINES = 3000;
+    const MAX_LINE_CHARS = 15000;
+
+    const state = {
+        path: null,
+        selectedFile: null,
+        files: [],
+        folderCache: {},
+        sort: 'name',
+        ascending: true,
+        connection: null,
+        tailing: false,
+        paused: false,
+        lineCount: 0,
+        lastSearchData: null,
+        openToken: 0,
+        fontSize: 13
+    };
+
+    /* ------------------------------------------------------------ storage --- */
+    // localStorage throws in some privacy modes; never let a preference read break boot.
+    const store = {
+        get(key) { try { return localStorage.getItem(key); } catch { return null; } },
+        set(key, value) { try { localStorage.setItem(key, value); } catch { /* ignore */ } }
+    };
+
+    /* -------------------------------------------------------------- utils --- */
+    const escapeRegExp = string => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapeHtml = text => String(text).replace(/[&<>"']/g, m =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m]));
+
+    const formatSize = bytes =>
+        bytes < 1024 ? `${bytes} B`
+        : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB`
+        : bytes < 1073741824 ? `${(bytes / 1048576).toFixed(1)} MB`
+        : `${(bytes / 1073741824).toFixed(2)} GB`;
+
+    const formatDate = value => {
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '-';
+        const pad = n => String(n).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} `
+             + `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    };
+
     const classify = line => {
-        const lvlMatch = line.match(/\b(ERROR|FATAL|ERR|FTL|WARN|WARNING|WRN|INFO|INF)\b/);
-        if (lvlMatch) {
-            const lvl = lvlMatch[1];
-            if (['ERROR', 'FATAL', 'ERR', 'FTL'].includes(lvl)) return 'error';
-            if (['WARN', 'WARNING', 'WRN'].includes(lvl)) return 'warn';
-            if (['INFO', 'INF'].includes(lvl)) return 'info';
+        const match = line.match(/\b(ERROR|FATAL|ERR|FTL|WARN|WARNING|WRN|INFO|INF)\b/);
+        if (match) {
+            const level = match[1];
+            if (['ERROR', 'FATAL', 'ERR', 'FTL'].includes(level)) return 'error';
+            if (['WARN', 'WARNING', 'WRN'].includes(level)) return 'warn';
+            return 'info';
         }
         if (/\b(EXCEPTION|FAIL)\b/i.test(line)) return 'error';
         return '';
     };
+
+    // Read an error message out of a failed response without assuming it is JSON.
+    async function responseError(response, fallback) {
+        try {
+            const data = await response.clone().json();
+            if (data && data.error) return new Error(data.error);
+        } catch { /* not JSON */ }
+        return new Error(`${fallback} (HTTP ${response.status})`);
+    }
+
+    /* --------------------------------------------------------- highlights --- */
     let customRe = null;
+
     function updateCustomRe() {
-        const kws = $('custom-highlight').value.split(',').map(k => k.trim()).filter(k => k);
-        customRe = kws.length > 0 ? new RegExp(`(${kws.map(escapeRegExp).join('|')})`, 'gi') : null;
+        const keywords = $('custom-highlight').value.split(',').map(k => k.trim()).filter(Boolean);
+        customRe = keywords.length ? new RegExp(`(${keywords.map(escapeRegExp).join('|')})`, 'gi') : null;
     }
-    function applyCustomHighlights(text) {
-        if (!customRe) return text;
-        let result = '';
-        let lastIdx = 0;
-        text.replace(customRe, (m, ...a) => {
-            const off = a[a.length - 2];
-            result += text.slice(lastIdx, off) + `<span class="custom-hl">${m}</span>`;
-            lastIdx = off + m.length;
-            return m;
-        });
-        return result + text.slice(lastIdx);
+
+    // Splits raw text into {text, mark} chunks. Everything is escaped exactly once,
+    // at render time, so a keyword like "&" can never match inside an "&amp;" entity.
+    function splitByRegex(text, regex) {
+        if (!regex) return [{ text, mark: false }];
+        const chunks = [];
+        let lastIndex = 0;
+        regex.lastIndex = 0;
+        let match;
+        while ((match = regex.exec(text)) !== null) {
+            if (match.index > lastIndex) chunks.push({ text: text.slice(lastIndex, match.index), mark: false });
+            chunks.push({ text: match[0], mark: true });
+            lastIndex = match.index + match[0].length;
+            if (match[0].length === 0) regex.lastIndex++; // guard against zero-width loops
+        }
+        if (lastIndex < text.length) chunks.push({ text: text.slice(lastIndex), mark: false });
+        return chunks;
     }
+
+    const renderCustom = text =>
+        splitByRegex(text, customRe)
+            .map(c => c.mark ? `<span class="custom-hl">${escapeHtml(c.text)}</span>` : escapeHtml(c.text))
+            .join('');
+
     function highlightMatches(line, query, regexMode) {
         let searchRe = null;
         if (query) {
-            try { searchRe = new RegExp(regexMode ? query : escapeRegExp(query), 'gi'); } 
+            try { searchRe = new RegExp(regexMode ? query : escapeRegExp(query), 'gi'); }
             catch { searchRe = null; }
         }
-        if (!searchRe && !customRe) return escapeHtml(line);
-        let result = '';
-        let lastIdx = 0;
-        if (searchRe) {
-            let chunks = [];
-            line.replace(searchRe, (match, ...args) => {
-                const offset = args[args.length - 2];
-                chunks.push({ text: line.slice(lastIdx, offset), isMark: false });
-                chunks.push({ text: match, isMark: true });
-                lastIdx = offset + match.length;
-                return match;
-            });
-            chunks.push({ text: line.slice(lastIdx), isMark: false });
-            for (const chunk of chunks) {
-                if (chunk.isMark) {
-                    result += `<mark>${applyCustomHighlights(escapeHtml(chunk.text))}</mark>`;
-                } else {
-                    result += applyCustomHighlights(escapeHtml(chunk.text));
-                }
-            }
-        } else if (customRe) {
-            result = applyCustomHighlights(escapeHtml(line));
-        }
-        return result;
+        if (!searchRe) return renderCustom(line);
+        return splitByRegex(line, searchRe)
+            .map(c => c.mark ? `<mark>${renderCustom(c.text)}</mark>` : renderCustom(c.text))
+            .join('');
     }
-    const tryFormatJson = (text) => {
-        if (!$('auto-format-json') || !$('auto-format-json').checked) return text;
-        let start = text.indexOf('{'); let end = text.lastIndexOf('}');
-        if (start !== -1 && end > start) {
-            let chunk = text.substring(start, end + 1);
-            if (chunk.indexOf('"') !== -1 && chunk.indexOf(':') !== -1) {
-                try { let parsed = JSON.parse(chunk); return text.substring(0, start) + '\n' + JSON.stringify(parsed, null, 2) + '\n' + text.substring(end + 1); } catch(e) {}
-            }
-        }
-        start = text.indexOf('['); end = text.lastIndexOf(']');
-        if (start !== -1 && end > start) {
-            let chunk = text.substring(start, end + 1);
-            if (chunk.indexOf('"') !== -1 && chunk.indexOf(':') !== -1) {
-                try { let parsed = JSON.parse(chunk); return text.substring(0, start) + '\n' + JSON.stringify(parsed, null, 2) + '\n' + text.substring(end + 1); } catch(e) {}
-            }
+
+    const tryFormatJson = text => {
+        if (!$('auto-format-json').checked) return text;
+        for (const [open, close] of [['{', '}'], ['[', ']']]) {
+            const start = text.indexOf(open);
+            const end = text.lastIndexOf(close);
+            if (start === -1 || end <= start) continue;
+            const chunk = text.slice(start, end + 1);
+            if (!chunk.includes('"')) continue;
+            try {
+                const parsed = JSON.parse(chunk);
+                return `${text.slice(0, start)}\n${JSON.stringify(parsed, null, 2)}\n${text.slice(end + 1)}`;
+            } catch { /* not valid JSON - leave the line alone */ }
         }
         return text;
     };
+
+    /* ------------------------------------------------------------- render --- */
+    function renderLine(lineNumber, text, extraClass = '') {
+        const body = text.length > MAX_LINE_CHARS
+            ? `${text.slice(0, MAX_LINE_CHARS)} ... [LINE TRUNCATED FOR PERFORMANCE. DOWNLOAD TO VIEW FULL]`
+            : text;
+        return `<span class="log-line ${extraClass}" id="L${lineNumber}">`
+             + `<a href="#L${lineNumber}" class="line-number" data-line="${lineNumber}">${lineNumber}</a>`
+             + `<span class="${classify(body)}">${renderCustom(tryFormatJson(body))}</span>`
+             + '</span>';
+    }
+
     function renderOutput(content, append = false) {
         const viewer = $('log-viewer');
-        if (!append) { viewer.innerHTML = ''; state.lineCount = 0; $('export-search-button').style.display = 'none'; state.lastSearchData = null; }
-        if (!content && !append) return;
-        let newLines = content.split('\n');
-        if (newLines.length > 0 && newLines[newLines.length - 1] === '') newLines.pop();
-        const html = newLines.map(line => {
-            state.lineCount++;
-            if (line.length > 15000) {
-                line = line.substring(0, 15000) + ' ... [LINE TRUNCATED FOR PERFORMANCE. DOWNLOAD TO VIEW FULL]';
-            }
-            return `<span class="log-line" id="L${state.lineCount}"><a href="#L${state.lineCount}" class="line-number" onclick="highlightLine(${state.lineCount})">${state.lineCount}</a><span class="${classify(line)}">${applyCustomHighlights(escapeHtml(tryFormatJson(line)))}</span></span>`;
-        }).join('\n');
-        if (append && viewer.innerHTML !== '') {
-            viewer.insertAdjacentHTML('beforeend', '\n' + html);
-            while (viewer.childElementCount > 3000) viewer.removeChild(viewer.firstElementChild);
-        } else {
-            viewer.insertAdjacentHTML('beforeend', html);
+        if (!append) {
+            viewer.textContent = '';
+            state.lineCount = 0;
+            state.lastSearchData = null;
+            $('export-search-button').hidden = true;
         }
-        if ($('auto-scroll').checked) viewer.scrollTop = viewer.scrollHeight; 
+        if (!content) return;
+
+        const lines = content.split('\n');
+        if (lines.length && lines[lines.length - 1] === '') lines.pop();
+        if (!lines.length) return;
+
+        const html = lines.map(line => renderLine(++state.lineCount, line)).join('\n');
+        const hasExisting = viewer.childElementCount > 0;
+        viewer.insertAdjacentHTML('beforeend', append && hasExisting ? `\n${html}` : html);
+
+        if (append) {
+            while (viewer.childElementCount > MAX_VIEWER_LINES) viewer.removeChild(viewer.firstElementChild);
+        }
+        if ($('auto-scroll').checked) viewer.scrollTop = viewer.scrollHeight;
     }
-    function renderFiles() { const query = $('search-input').value.toLowerCase(); const visible = state.files.filter(file => (!query || file.name.toLowerCase().includes(query)) && (!$('logs-only').checked || file.extension.toLowerCase() === '.log')); visible.sort((a, b) => { const left = state.sort === 'size' ? a.size : state.sort === 'modified' ? new Date(a.lastModified) : a.name; const right = state.sort === 'size' ? b.size : state.sort === 'modified' ? new Date(b.lastModified) : b.name; return (left > right ? 1 : left < right ? -1 : 0) * (state.ascending ? 1 : -1); }); $('file-list').innerHTML = visible.map(file => `<tr><td><span class="file-name">${escapeHtml(file.name)}</span></td><td class="file-meta">${formatSize(file.size)}</td><td class="file-meta">${formatDate(file.lastModified)}</td><td class="file-meta">${escapeHtml(file.extension || 'file')}</td><td class="actions" style="text-align: right; display: flex; gap: 4px; justify-content: flex-end;"><button class="text-button" data-action="open" data-path="${escapeHtml(file.path)}">Open</button><button class="text-button" data-action="tail" data-path="${escapeHtml(file.path)}">Tail</button><a href="${window.appBasePath}/api/files/download?path=${encodeURIComponent(file.path)}" download style="text-decoration: none;"><button class="text-button">Download</button></a></td></tr>`).join(''); $('empty-state').style.display = visible.length ? 'none' : 'block'; }
-    function showLoading(text) { if (text === "LOADING DIRECTORY...") { $("file-list").innerHTML = Array(5).fill("<tr><td colspan=\"5\"><div class=\"skeleton-line\"></div></td></tr>").join(""); } else { $("log-viewer").innerHTML = Array(8).fill(0).map((_, i) => `<div class="skeleton-line" style="width: ${40 + Math.random() * 40}%"></div>`).join(""); } }
-    function hideLoading() { if ($("file-list").innerHTML.includes("skeleton-line")) $("file-list").innerHTML = "<tr><td colspan=\"5\" style=\"text-align:center; color:var(--error);\">Failed to load.</td></tr>"; if ($("log-viewer").innerHTML.includes("skeleton-line")) $("log-viewer").innerHTML = "Failed to load."; }
+
+    function renderFiles() {
+        const query = $('search-input').value.toLowerCase();
+        const logsOnly = $('logs-only').checked;
+        const visible = state.files.filter(file =>
+            (!query || file.name.toLowerCase().includes(query)) &&
+            (!logsOnly || (file.extension || '').toLowerCase() === '.log'));
+
+        const key = state.sort;
+        visible.sort((a, b) => {
+            let result;
+            if (key === 'size') result = a.size - b.size;
+            else if (key === 'modified') result = new Date(a.lastModified) - new Date(b.lastModified);
+            else result = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+            return result * (state.ascending ? 1 : -1);
+        });
+
+        $('file-list').innerHTML = visible.map(file => {
+            const path = escapeHtml(file.path);
+            return '<tr>'
+                 + `<td><span class="file-name">${escapeHtml(file.name)}</span></td>`
+                 + `<td class="file-meta">${formatSize(file.size)}</td>`
+                 + `<td class="file-meta">${formatDate(file.lastModified)}</td>`
+                 + `<td class="file-meta">${escapeHtml(file.extension || 'file')}</td>`
+                 + '<td class="actions"><span class="row-actions">'
+                 + `<button class="text-button" data-action="open" data-path="${path}">Open</button>`
+                 + `<button class="text-button" data-action="tail" data-path="${path}">Tail</button>`
+                 + `<a class="text-button" href="${api('/api/files/download?path=')}${encodeURIComponent(file.path)}" download>Download</a>`
+                 + '</span></td></tr>';
+        }).join('');
+
+        $('empty-state').hidden = visible.length > 0;
+        $('empty-state').textContent = state.files.length
+            ? 'No files match the current filter.'
+            : 'Choose a folder to inspect its files.';
+    }
+
+    function updateSortIndicators() {
+        document.querySelectorAll('th[data-sort]').forEach(header => {
+            const active = header.dataset.sort === state.sort;
+            header.setAttribute('aria-sort', active ? (state.ascending ? 'ascending' : 'descending') : 'none');
+            const mark = header.querySelector('.sort-mark');
+            if (mark) mark.textContent = active ? (state.ascending ? '▲' : '▼') : '';
+        });
+    }
+
+    /* ------------------------------------------------------------ loading --- */
+    // A single overlay drives every busy state. The previous version wrote skeleton
+    // markup into the panels and then blindly replaced any leftover skeleton with
+    // "Failed to load.", which clobbered successful renders.
+    let pending = 0;
+
+    function showLoading(text) {
+        pending++;
+        $('loading-text').textContent = text;
+        $('loading-overlay').hidden = false;
+        $('loading-overlay').classList.remove('hidden');
+    }
+
+    function hideLoading() {
+        pending = Math.max(0, pending - 1);
+        if (pending === 0) $('loading-overlay').classList.add('hidden');
+    }
+
+    function showFilesError(message) {
+        $('file-list').innerHTML = `<tr><td colspan="5" class="error-row">${escapeHtml(message)}</td></tr>`;
+        $('empty-state').hidden = true;
+    }
+
+    function showPanel(which) {
+        $('file-panel').hidden = which !== 'files';
+        $('viewer-panel').hidden = which !== 'viewer';
+    }
+
+    /* --------------------------------------------------------------- tree --- */
     async function initTree() {
         try {
-            const response = await fetch(`${window.appBasePath}/api/files/list`);
-            const data = await response.json();
-            $('root-count').textContent = data.folders.length;
-            $('folder-tree').innerHTML = '';
-            renderTreeNodes($('folder-tree'), data.folders);
-        } catch (e) { console.error('Failed to init tree', e); }
+            // /roots lists the configured roots themselves. Listing without a path only
+            // ever returned the *contents of the first root*, so every other configured
+            // root was unreachable from the sidebar.
+            const response = await fetch(api('/api/files/roots'));
+            if (!response.ok) throw await responseError(response, 'Unable to load roots.');
+            const roots = await response.json();
+            $('root-count').textContent = roots.length;
+            $('folder-tree').textContent = '';
+            renderTreeNodes($('folder-tree'), roots);
+        } catch (error) {
+            console.error('Failed to init tree', error);
+            $('folder-tree').innerHTML = `<p class="tree-empty">${escapeHtml(error.message)}</p>`;
+        }
     }
+
     function renderTreeNodes(container, folders) {
-        if (!folders || folders.length === 0) return;
-        const ul = document.createElement('div');
-        ul.className = 'tree-level';
-        ul.style.paddingLeft = container.id === 'folder-tree' ? '0' : '15px';
+        if (!folders || !folders.length) return;
+        const level = document.createElement('div');
+        level.className = 'tree-level';
         folders.forEach(folder => {
             const node = document.createElement('div');
             node.className = 'tree-node';
-            node.innerHTML = `
-                <div style="display: flex; align-items: center; padding: 4px 0; cursor: pointer;">
-                    <span class="tree-toggle" data-tree-path="${escapeHtml(folder.path)}" style="width: 20px; text-align: center; color: var(--muted); font-family: monospace;">&#9654;</span>
-                    <span class="tree-label" data-folder="${escapeHtml(folder.path)}" style="color: var(--ink); flex: 1; user-select: none;">${escapeHtml(folder.name)}</span>
-                </div>
-                <div class="tree-children" style="display: none;"></div>
-            `;
-            ul.appendChild(node);
+            node.innerHTML =
+                '<div class="tree-row">'
+              + `<button type="button" class="tree-toggle" data-tree-path="${escapeHtml(folder.path)}" `
+              + `aria-expanded="false" aria-label="Expand ${escapeHtml(folder.name)}">&#9654;</button>`
+              + `<button type="button" class="tree-label" data-folder="${escapeHtml(folder.path)}" `
+              + `title="${escapeHtml(folder.path)}">${escapeHtml(folder.name)}</button>`
+              + '</div>'
+              + '<div class="tree-children" hidden></div>';
+            level.appendChild(node);
         });
-        container.appendChild(ul);
+        container.appendChild(level);
     }
+
     document.addEventListener('click', async event => {
-        if (event.target.classList.contains('tree-toggle')) {
-            const btn = event.target;
-            const path = btn.dataset.treePath;
-            const childrenDiv = btn.parentElement.nextElementSibling;
-            if (btn.classList.contains('expanded')) {
-                btn.classList.remove('expanded');
-                btn.innerHTML = '&#9654;';
-                childrenDiv.style.display = 'none';
-            } else {
-                if (childrenDiv.innerHTML === '') {
-                    try {
-                        btn.innerHTML = '&#8987;';
-                        const response = await fetch(`${window.appBasePath}/api/files/list?path=` + encodeURIComponent(path));
-                        const data = await response.json();
-                        if (data.folders.length > 0) renderTreeNodes(childrenDiv, data.folders);
-                        else childrenDiv.innerHTML = '<div style="padding-left:15px; color:var(--muted); font-size:11px; font-style:italic;">(No subfolders)</div>';
-                    } catch(e) { childrenDiv.innerHTML = '<div style="color:red;">Error</div>'; }
-                }
-                btn.classList.add('expanded');
-                btn.innerHTML = '&#9660;';
-                childrenDiv.style.display = 'block';
+        const toggle = event.target.closest('.tree-toggle');
+        if (!toggle) return;
+        const children = toggle.closest('.tree-node').querySelector('.tree-children');
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+
+        if (expanded) {
+            toggle.setAttribute('aria-expanded', 'false');
+            toggle.innerHTML = '&#9654;';
+            children.hidden = true;
+            return;
+        }
+
+        if (!children.hasChildNodes()) {
+            toggle.innerHTML = '&#8987;';
+            try {
+                const response = await fetch(`${api('/api/files/list?path=')}${encodeURIComponent(toggle.dataset.treePath)}`);
+                if (!response.ok) throw await responseError(response, 'Unable to expand folder.');
+                const data = await response.json();
+                if (data.folders.length) renderTreeNodes(children, data.folders);
+                else children.innerHTML = '<p class="tree-empty">(No subfolders)</p>';
+            } catch (error) {
+                children.innerHTML = `<p class="tree-empty">${escapeHtml(error.message)}</p>`;
             }
         }
+        toggle.setAttribute('aria-expanded', 'true');
+        toggle.innerHTML = '&#9660;';
+        children.hidden = false;
     });
 
-    state.folderCache = state.folderCache || {};
-    async function loadFolder(path) { 
-        document.getElementById('file-panel').style.display = 'flex'; 
-        document.getElementById('viewer-panel').style.display = 'none'; 
+    /* ------------------------------------------------------------ actions --- */
+    async function loadFolder(path, { force = false } = {}) {
+        showPanel('files');
+        const key = path || '';
+
         const fetchAndRender = async () => {
-            const response = await fetch(`${window.appBasePath}/api/files/list${path ? `?path=${encodeURIComponent(path)}` : ''}`); 
-            const data = await response.json(); 
-            if (!response.ok) throw new Error(data.error || 'Unable to load folder.'); 
-            state.folderCache[path || ''] = data;
-            state.path = data.currentPath; state.files = data.files; $('current-path').value = data.currentPath; 
+            const response = await fetch(path ? `${api('/api/files/list?path=')}${encodeURIComponent(path)}` : api('/api/files/list'));
+            if (!response.ok) throw await responseError(response, 'Unable to load folder.');
+            const data = await response.json();
+            state.folderCache[key] = data;
+            state.path = data.currentPath;
+            state.files = data.files;
+            $('current-path').value = data.currentPath;
             renderFiles();
         };
-        if (state.folderCache[path || '']) {
-            const data = state.folderCache[path || ''];
-            state.path = data.currentPath; state.files = data.files; $('current-path').value = data.currentPath; 
+
+        // Serve the cache instantly, then revalidate — but "Refresh" must always
+        // go to the server, otherwise the button visibly does nothing.
+        if (!force && state.folderCache[key]) {
+            const data = state.folderCache[key];
+            state.path = data.currentPath;
+            state.files = data.files;
+            $('current-path').value = data.currentPath;
             renderFiles();
-            fetchAndRender().catch(e => console.error(e));
-        } else {
-            showLoading('LOADING DIRECTORY...'); 
-            try { await fetchAndRender(); } finally { hideLoading(); } 
+            fetchAndRender().catch(error => console.error('Background refresh failed', error));
+            return;
         }
-    }
-    async function openFile(path) { document.getElementById('file-panel').style.display = 'none'; document.getElementById('viewer-panel').style.display = 'flex'; showLoading('OPENING FILE...'); try { state.selectedFile = path; const response = await fetch(`${window.appBasePath}/api/files/content?path=${encodeURIComponent(path)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to open file.'); $('viewer-title').textContent = data.fileName; renderOutput(data.content); $('connection-status').textContent = data.isTruncated ? 'PARTIAL READ' : 'READY'; $('pause-button').disabled = true; } finally { hideLoading(); } }
-    async function tailFile(path) { document.getElementById('file-panel').style.display = 'none'; document.getElementById('viewer-panel').style.display = 'flex'; showLoading('CONNECTING LIVE TAIL...'); try { state.selectedFile = path; if (typeof signalR === 'undefined') throw new Error('SignalR client could not load. Check network access and refresh the page.'); if (!state.connection) { state.connection = new signalR.HubConnectionBuilder().withUrl(`${window.appBasePath}/hubs/log`).withAutomaticReconnect().build(); state.connection.on('LogAppended', text => { if (!state.paused) renderOutput(text, true); }); } if (state.connection.state === 'Disconnected') { await state.connection.start(); } await state.connection.invoke('Subscribe', path); state.paused = false; $('viewer-title').textContent = path.split(/[\\/]/).pop(); $('connection-status').textContent = 'LIVE'; $('connection-status').classList.add('live'); $('pause-button').disabled = false; $('pause-button').textContent = 'Pause'; renderOutput(''); } finally { hideLoading(); } }
-    async function searchContent() { 
+
+        showLoading('LOADING DIRECTORY...');
         try {
-            if (!state.selectedFile) throw new Error('Open or tail a file before searching.'); 
-            const query = $('content-search').value; 
-            if (!query) {
-                $('search-summary').textContent = '';
-                state.lastSearchData = null;
-                if (state.connection) {
-                    await state.connection.stop();
-                    state.connection = null;
-                    await tailFile(state.selectedFile);
-                    return;
-                }
-                await openFile(state.selectedFile);
-                return;
-            }
-            showLoading('SEARCHING LOGS...'); 
-            const regex = $('search-mode').value === 'regex'; 
-            const ctx = $('search-context').value; 
-            const response = await fetch(`${window.appBasePath}/api/files/search?path=${encodeURIComponent(state.selectedFile)}&query=${encodeURIComponent(query)}&regex=${regex}&context=${ctx}`); 
-            const data = await response.json(); 
-            if (!response.ok) throw new Error(data.error || 'Unable to search file content.'); 
-            const matchCount = data.filter(d => d.isMatch).length; 
-            $('search-summary').textContent = `${matchCount} match${matchCount === 1 ? '' : 'es'}`; 
-            $('log-viewer').innerHTML = data.length ? data.map((result, i) => {
-                let html = '';
-                if (i > 0 && result.lineNumber > data[i - 1].lineNumber + 1) {
-                    html += `<span class="log-line divider" style="opacity: 0.5; padding: 4px 10px; font-style: italic; color: #888;">--- gap ---</span>\n`;
-                }
-                html += `<span class="log-line ${result.isMatch ? '' : 'context-line'}" id="L${result.lineNumber}"><a href="#L${result.lineNumber}" class="line-number" onclick="highlightLine(${result.lineNumber})">${result.lineNumber}</a><span class="${classify(result.line)}">${result.isMatch ? highlightMatches(result.line, query, regex) : highlightMatches(result.line, '', false)}</span></span>`;
-                return html;
-            }).join('\n') : 'No matching lines.'; 
-            state.lastSearchData = data; 
-            $('export-search-button').style.display = data.length ? 'inline-block' : 'none'; 
+            await fetchAndRender();
+        } catch (error) {
+            showFilesError(error.message);
+            throw error;
         } finally {
             hideLoading();
         }
     }
-    document.addEventListener('click', async event => {
+
+    async function stopTail() {
+        state.tailing = false;
+        if (!state.connection) return;
+        try { await state.connection.stop(); } catch { /* already closed */ }
+        state.connection = null;
+    }
+
+    async function openFile(path) {
+        const token = ++state.openToken;
+        showPanel('viewer');
+        showLoading('OPENING FILE...');
         try {
-            const target = event.target.closest('[data-folder], [data-action]');
-            if (!target) return;
-            if (target.dataset.folder) await loadFolder(target.dataset.folder);
-            if (target.dataset.action === 'open') await openFile(target.dataset.path);
-            if (target.dataset.action === 'tail') await tailFile(target.dataset.path);
-        } catch (error) { renderOutput(`ERROR: ${error.message}`); }
+            await stopTail();
+            state.selectedFile = path;
+            const response = await fetch(`${api('/api/files/content?path=')}${encodeURIComponent(path)}`);
+            if (!response.ok) throw await responseError(response, 'Unable to open file.');
+            const data = await response.json();
+            if (token !== state.openToken) return; // a newer open/tail superseded this one
+            $('viewer-title').textContent = data.fileName;
+            renderOutput(data.content);
+            setStatus(data.isTruncated ? 'PARTIAL READ' : 'READY', false);
+            $('pause-button').disabled = true;
+        } finally {
+            hideLoading();
+        }
+    }
+
+    async function tailFile(path) {
+        const token = ++state.openToken;
+        showPanel('viewer');
+        showLoading('CONNECTING LIVE TAIL...');
+        try {
+            if (typeof signalR === 'undefined') {
+                throw new Error('SignalR client could not load. Check network access and refresh the page.');
+            }
+            await stopTail();
+            state.selectedFile = path;
+            $('viewer-title').textContent = path.split(/[\\/]/).pop();
+
+            // Clear BEFORE subscribing. The old code cleared afterwards, which raced the
+            // server's initial tail payload and silently wiped the first lines.
+            renderOutput('');
+
+            const connection = new signalR.HubConnectionBuilder()
+                .withUrl(api('/hubs/log'))
+                .withAutomaticReconnect()
+                .build();
+            connection.on('LogAppended', text => {
+                if (!state.paused && state.connection === connection) renderOutput(text, true);
+            });
+            connection.onreconnecting(() => setStatus('RECONNECTING', false));
+            connection.onreconnected(async () => {
+                try { await connection.invoke('Subscribe', path); setStatus('LIVE', true); }
+                catch { setStatus('OFFLINE', false); }
+            });
+            connection.onclose(() => { if (state.connection === connection) setStatus('OFFLINE', false); });
+
+            await connection.start();
+            if (token !== state.openToken) { try { await connection.stop(); } catch { /* ignore */ } return; }
+            state.connection = connection;
+            await connection.invoke('Subscribe', path);
+
+            state.tailing = true;
+            state.paused = false;
+            setStatus('LIVE', true);
+            $('pause-button').disabled = false;
+            $('pause-button').textContent = 'Pause';
+        } finally {
+            hideLoading();
+        }
+    }
+
+    function setStatus(text, live) {
+        $('connection-status').textContent = text;
+        $('connection-status').classList.toggle('live', !!live);
+    }
+
+    async function searchContent() {
+        if (!state.selectedFile) throw new Error('Open or tail a file before searching.');
+        const query = $('content-search').value;
+
+        if (!query) {
+            $('search-summary').textContent = '';
+            state.lastSearchData = null;
+            if (state.tailing) await tailFile(state.selectedFile);
+            else await openFile(state.selectedFile);
+            return;
+        }
+
+        showLoading('SEARCHING LOGS...');
+        try {
+            const regex = $('search-mode').value === 'regex';
+            const context = $('search-context').value;
+            const url = `${api('/api/files/search')}?path=${encodeURIComponent(state.selectedFile)}`
+                      + `&query=${encodeURIComponent(query)}&regex=${regex}&context=${encodeURIComponent(context)}`;
+            const response = await fetch(url);
+            if (!response.ok) throw await responseError(response, 'Unable to search file content.');
+            const data = await response.json();
+
+            const matchCount = data.filter(row => row.isMatch).length;
+            $('search-summary').textContent = `${matchCount} match${matchCount === 1 ? '' : 'es'}`;
+
+            const viewer = $('log-viewer');
+            if (!data.length) {
+                viewer.textContent = 'No matching lines.';
+            } else {
+                viewer.innerHTML = data.map((row, index) => {
+                    const gap = index > 0 && row.lineNumber > data[index - 1].lineNumber + 1
+                        ? '<span class="log-line divider">--- gap ---</span>\n'
+                        : '';
+                    const body = row.isMatch
+                        ? highlightMatches(row.line, query, regex)
+                        : renderCustom(row.line);
+                    return `${gap}<span class="log-line ${row.isMatch ? '' : 'context-line'}" id="L${row.lineNumber}">`
+                         + `<a href="#L${row.lineNumber}" class="line-number" data-line="${row.lineNumber}">${row.lineNumber}</a>`
+                         + `<span class="${classify(row.line)}">${body}</span></span>`;
+                }).join('\n');
+            }
+
+            state.lastSearchData = data;
+            $('export-search-button').hidden = !data.length;
+        } finally {
+            hideLoading();
+        }
+    }
+
+    const reportError = error => {
+        console.error(error);
+        renderOutput(`ERROR: ${error.message}`);
+    };
+
+    /* ------------------------------------------------------------- events --- */
+    document.addEventListener('click', async event => {
+        const lineLink = event.target.closest('.line-number');
+        if (lineLink) {
+            event.preventDefault();
+            highlightLine(lineLink.dataset.line);
+            return;
+        }
+
+        const target = event.target.closest('[data-folder], [data-action]');
+        if (!target) return;
+        try {
+            if (target.dataset.folder) {
+                document.querySelectorAll('.tree-label.active').forEach(el => el.classList.remove('active'));
+                target.classList.add('active');
+                await loadFolder(target.dataset.folder);
+            } else if (target.dataset.action === 'open') {
+                await openFile(target.dataset.path);
+            } else if (target.dataset.action === 'tail') {
+                await tailFile(target.dataset.path);
+            }
+        } catch (error) {
+            reportError(error);
+        }
     });
-    const navigate = () => loadFolder($('current-path').value.trim()).catch(error => renderOutput(`ERROR: ${error.message}`));
-    updateCustomRe();
+
+    function highlightLine(lineNumber) {
+        document.querySelectorAll('.highlight-line').forEach(el => el.classList.remove('highlight-line'));
+        const el = document.getElementById(`L${lineNumber}`);
+        if (!el) return;
+        el.classList.add('highlight-line');
+        if (state.selectedFile) {
+            history.replaceState(null, '', `?path=${encodeURIComponent(state.selectedFile)}#L${lineNumber}`);
+        }
+    }
+
+    const navigate = () => loadFolder($('current-path').value.trim(), { force: true }).catch(reportError);
+
+    $('go-button').addEventListener('click', navigate);
+    $('current-path').addEventListener('keydown', event => { if (event.key === 'Enter') navigate(); });
+    $('refresh-button').addEventListener('click', () => loadFolder(state.path, { force: true }).catch(reportError));
+    $('reset-root').addEventListener('click', () => { $('current-path').value = ''; navigate(); });
+    $('search-input').addEventListener('input', renderFiles);
+    $('logs-only').addEventListener('change', renderFiles);
+    $('clear-button').addEventListener('click', () => renderOutput(''));
+    $('search-button').addEventListener('click', () => {
+        searchContent().catch(error => { $('search-summary').textContent = error.message; });
+    });
+    $('content-search').addEventListener('keydown', event => { if (event.key === 'Enter') $('search-button').click(); });
+
+    $('theme-button').addEventListener('click', () => {
+        const dark = document.documentElement.classList.toggle('dark');
+        store.set('theme', dark ? 'dark' : 'light');
+        $('theme-button').setAttribute('aria-pressed', String(dark));
+    });
+
+    $('toggle-sidebar').addEventListener('click', () => {
+        const collapsed = document.querySelector('.main-content').classList.toggle('sidebar-collapsed');
+        $('toggle-sidebar').setAttribute('aria-expanded', String(!collapsed));
+    });
+
     $('custom-highlight').addEventListener('change', () => {
         updateCustomRe();
         if (!state.selectedFile) return;
-        if (state.connection) { state.connection.stop().then(() => tailFile(state.selectedFile)); }
-        else if (state.lastSearchData) { searchContent(); }
-        else { openFile(state.selectedFile); }
+        if (state.lastSearchData) searchContent().catch(reportError);
+        else if (state.tailing) tailFile(state.selectedFile).catch(reportError);
+        else openFile(state.selectedFile).catch(reportError);
     });
-    $('go-button').addEventListener('click', navigate); $('current-path').addEventListener('keydown', event => { if (event.key === 'Enter') navigate(); }); $('refresh-button').addEventListener('click', () => loadFolder(state.path)); $('reset-root').addEventListener('click', () => { $('current-path').value = ''; navigate(); }); $('search-input').addEventListener('input', renderFiles); $('logs-only').addEventListener('change', renderFiles); $('clear-button').addEventListener('click', () => renderOutput('')); $('search-button').addEventListener('click', () => searchContent().catch(error => { $('search-summary').textContent = error.message; })); $('content-search').addEventListener('keydown', event => { if (event.key === 'Enter') $('search-button').click(); }); $('theme-button').addEventListener('click', () => { const isDark = document.body.classList.toggle('dark'); localStorage.setItem('theme', isDark ? 'dark' : 'light'); }); $('auto-format-json').addEventListener('change', (e) => { localStorage.setItem('autoFormatJson', e.target.checked); if(e.target.checked && $('log-viewer').innerHTML) { $('format-json-button').click(); } }); $('word-wrap').addEventListener('change', (e) => { if (e.target.checked) { $('log-viewer').classList.remove('nowrap'); localStorage.setItem('wordWrap', 'true'); } else { $('log-viewer').classList.add('nowrap'); localStorage.setItem('wordWrap', 'false'); } }); $('show-lines').addEventListener('change', (e) => { if (e.target.checked) { $('log-viewer').classList.add('show-lines'); localStorage.setItem('showLines', 'true'); } else { $('log-viewer').classList.remove('show-lines'); localStorage.setItem('showLines', 'false'); } }); $('errors-only').addEventListener('change', (e) => { if (e.target.checked) { $('log-viewer').classList.add('errors-only-mode'); localStorage.setItem('errorsOnly', 'true'); } else { $('log-viewer').classList.remove('errors-only-mode'); localStorage.setItem('errorsOnly', 'false'); } }); $('copy-button').addEventListener('click', async () => { try { const text = Array.from($('log-viewer').querySelectorAll('.log-line')).map(el => el.lastElementChild.textContent).join('\n'); await navigator.clipboard.writeText(text); const btn = $('copy-button'); const old = btn.textContent; btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = old, 2000); } catch(err) { alert('Failed to copy'); } }); $('export-search-button').addEventListener('click', () => { if (!state.lastSearchData) return; const text = state.lastSearchData.map(r => r.line).join('\n'); const blob = new Blob([text], { type: 'text/plain' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `search_${Date.now()}.txt`; a.click(); URL.revokeObjectURL(url); }); $('format-json-button').addEventListener('click', () => { document.querySelectorAll('.log-line > span:last-child').forEach(el => { let text = el.textContent; let start = text.indexOf('{'); let end = text.lastIndexOf('}'); if (start !== -1 && end > start) { try { let parsed = JSON.parse(text.substring(start, end + 1)); el.textContent = text.substring(0, start) + '\n' + JSON.stringify(parsed, null, 2) + '\n' + text.substring(end + 1); return; } catch(e) {} } start = text.indexOf('['); end = text.lastIndexOf(']'); if (start !== -1 && end > start) { try { let parsed = JSON.parse(text.substring(start, end + 1)); el.textContent = text.substring(0, start) + '\n' + JSON.stringify(parsed, null, 2) + '\n' + text.substring(end + 1); } catch(e) {} } }); }); $('close-file-button').addEventListener('click', async () => { if (state.connection) { await state.connection.stop(); state.connection = null; } state.selectedFile = null; $('viewer-panel').style.display = 'none'; $('file-panel').style.display = 'flex'; history.replaceState(null, null, window.location.pathname); }); $('pause-button').addEventListener('click', () => { state.paused = !state.paused; $('pause-button').textContent = state.paused ? 'Resume' : 'Pause'; });
-    $('font-inc').addEventListener('click', () => { state.fontSize += 1; localStorage.setItem('fontSize', state.fontSize); document.body.style.setProperty('--log-font-size', state.fontSize + 'px'); });
-    $('font-dec').addEventListener('click', () => { state.fontSize = Math.max(8, state.fontSize - 1); localStorage.setItem('fontSize', state.fontSize); document.body.style.setProperty('--log-font-size', state.fontSize + 'px'); });
-    window.highlightLine = (lineNum) => {
-        document.querySelectorAll('.highlight-line').forEach(el => el.classList.remove('highlight-line'));
-        const el = document.getElementById('L' + lineNum);
-        if (el) {
-            el.classList.add('highlight-line');
-            history.replaceState(null, null, `?path=${encodeURIComponent(state.selectedFile)}#L${lineNum}`);
+
+    $('auto-format-json').addEventListener('change', event => {
+        store.set('autoFormatJson', event.target.checked);
+        if (event.target.checked && $('log-viewer').childElementCount) $('format-json-button').click();
+    });
+
+    const bindToggle = (id, storageKey, className, target = () => $('log-viewer')) =>
+        $(id).addEventListener('change', event => {
+            store.set(storageKey, String(event.target.checked));
+            target().classList.toggle(className, event.target.checked);
+        });
+
+    bindToggle('show-lines', 'showLines', 'show-lines');
+    bindToggle('errors-only', 'errorsOnly', 'errors-only-mode');
+    $('word-wrap').addEventListener('change', event => {
+        store.set('wordWrap', String(event.target.checked));
+        $('log-viewer').classList.toggle('nowrap', !event.target.checked);
+    });
+
+    $('copy-button').addEventListener('click', async () => {
+        const button = $('copy-button');
+        try {
+            // Skip gap dividers: they have no child element, and the old
+            // `lastElementChild.textContent` threw on them, breaking Copy entirely.
+            const text = Array.from($('log-viewer').querySelectorAll('.log-line'))
+                .filter(el => !el.classList.contains('divider'))
+                .map(el => (el.lastElementChild || el).textContent)
+                .join('\n');
+            await navigator.clipboard.writeText(text);
+            button.textContent = 'Copied!';
+        } catch {
+            button.textContent = 'Copy failed';
         }
+        setTimeout(() => { button.textContent = 'Copy'; }, 2000);
+    });
+
+    $('export-search-button').addEventListener('click', () => {
+        if (!state.lastSearchData) return;
+        const text = state.lastSearchData.map(row => row.line).join('\n');
+        const url = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `search_${Date.now()}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        // Revoking synchronously can cancel the download in some browsers.
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+
+    $('format-json-button').addEventListener('click', () => {
+        document.querySelectorAll('.log-line > span:last-child').forEach(el => {
+            const text = el.textContent;
+            for (const [open, close] of [['{', '}'], ['[', ']']]) {
+                const start = text.indexOf(open);
+                const end = text.lastIndexOf(close);
+                if (start === -1 || end <= start) continue;
+                try {
+                    const parsed = JSON.parse(text.slice(start, end + 1));
+                    el.textContent = `${text.slice(0, start)}\n${JSON.stringify(parsed, null, 2)}\n${text.slice(end + 1)}`;
+                    return;
+                } catch { /* not JSON */ }
+            }
+        });
+    });
+
+    $('close-file-button').addEventListener('click', async () => {
+        state.openToken++;
+        await stopTail();
+        state.selectedFile = null;
+        state.lastSearchData = null;
+        $('content-search').value = '';
+        $('search-summary').textContent = '';
+        setStatus('OFFLINE', false);
+        showPanel('files');
+        history.replaceState(null, '', window.location.pathname);
+    });
+
+    $('pause-button').addEventListener('click', () => {
+        state.paused = !state.paused;
+        $('pause-button').textContent = state.paused ? 'Resume' : 'Pause';
+    });
+
+    const applyFontSize = () => {
+        store.set('fontSize', String(state.fontSize));
+        document.documentElement.style.setProperty('--log-font-size', `${state.fontSize}px`);
     };
-    function checkUrlParams() {
-        const params = new URLSearchParams(window.location.search);
-        const path = params.get('path');
-        if (path) { openFile(path).then(() => { if (window.location.hash.startsWith('#L')) { const num = window.location.hash.substring(2); window.highlightLine(num); const el = document.getElementById('L' + num); if (el) el.scrollIntoView({ block: 'center' }); } }); }
+    $('font-inc').addEventListener('click', () => { state.fontSize = Math.min(28, state.fontSize + 1); applyFontSize(); });
+    $('font-dec').addEventListener('click', () => { state.fontSize = Math.max(8, state.fontSize - 1); applyFontSize(); });
+
+    document.querySelectorAll('th[data-sort]').forEach(header => header.addEventListener('click', () => {
+        state.ascending = state.sort === header.dataset.sort ? !state.ascending : true;
+        state.sort = header.dataset.sort;
+        updateSortIndicators();
+        renderFiles();
+    }));
+
+    window.addEventListener('beforeunload', () => { if (state.connection) state.connection.stop(); });
+
+    /* ---------------------------------------------------------- bootstrap --- */
+    function restorePreferences() {
+        const storedSize = parseInt(store.get('fontSize'), 10);
+        state.fontSize = Number.isFinite(storedSize) ? Math.min(28, Math.max(8, storedSize)) : 13;
+        applyFontSize();
+
+        $('theme-button').setAttribute('aria-pressed', String(document.documentElement.classList.contains('dark')));
+
+        const restore = (id, storageKey, defaultOn) => {
+            const stored = store.get(storageKey);
+            const on = stored === null ? defaultOn : stored === 'true';
+            $(id).checked = on;
+            return on;
+        };
+        restore('auto-format-json', 'autoFormatJson', false);
+        $('log-viewer').classList.toggle('show-lines', restore('show-lines', 'showLines', true));
+        $('log-viewer').classList.toggle('errors-only-mode', restore('errors-only', 'errorsOnly', false));
+        $('log-viewer').classList.toggle('nowrap', !restore('word-wrap', 'wordWrap', true));
     }
-    document.querySelectorAll('th[data-sort]').forEach(header => header.addEventListener('click', () => { state.ascending = state.sort === header.dataset.sort ? !state.ascending : true; state.sort = header.dataset.sort; renderFiles(); })); initTree(); loadFolder().catch(error => renderOutput(`ERROR: ${error.message}`));
-    checkUrlParams();
+
+    async function boot() {
+        restorePreferences();
+        updateCustomRe();
+        updateSortIndicators();
+
+        const deepLink = new URLSearchParams(window.location.search).get('path');
+
+        // Await the folder load so it cannot race the deep link and flip the panel
+        // back to the browser after the file has already opened.
+        await loadFolder().catch(reportError);
+        initTree();
+
+        if (!deepLink) return;
+        try {
+            await openFile(deepLink);
+        } catch (error) {
+            reportError(error);
+            return;
+        }
+
+        // Jumping to the anchor is a nicety; never let it discard a file that loaded.
+        try {
+            if (window.location.hash.startsWith('#L')) {
+                const lineNumber = window.location.hash.slice(2);
+                highlightLine(lineNumber);
+                document.getElementById(`L${lineNumber}`)?.scrollIntoView?.({ block: 'center' });
+            }
+        } catch (error) {
+            console.error('Could not scroll to the linked line', error);
+        }
+    }
+
+    boot();
 })();
-
-document.getElementById('toggle-sidebar').addEventListener('click', () => { document.querySelector('.main-content').classList.toggle('sidebar-collapsed'); });
-
-
-
-
