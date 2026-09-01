@@ -16,10 +16,22 @@
         const kws = $('custom-highlight').value.split(',').map(k => k.trim()).filter(k => k);
         customRe = kws.length > 0 ? new RegExp(`(${kws.map(escapeRegExp).join('|')})`, 'gi') : null;
     }
+    function applyCustomHighlights(text) {
+        if (!customRe) return text;
+        let result = '';
+        let lastIdx = 0;
+        text.replace(customRe, (m, ...a) => {
+            const off = a[a.length - 2];
+            result += text.slice(lastIdx, off) + `<span class="custom-hl">${m}</span>`;
+            lastIdx = off + m.length;
+            return m;
+        });
+        return result + text.slice(lastIdx);
+    }
     function highlightMatches(line, query, regexMode) {
         let searchRe = null;
         if (query) {
-            try { searchRe = new RegExp(regexMode ? query : escapeRegExp(query), regexMode ? 'gi' : 'i'); } 
+            try { searchRe = new RegExp(regexMode ? query : escapeRegExp(query), 'gi'); } 
             catch { searchRe = null; }
         }
         if (!searchRe && !customRe) return escapeHtml(line);
@@ -37,30 +49,13 @@
             chunks.push({ text: line.slice(lastIdx), isMark: false });
             for (const chunk of chunks) {
                 if (chunk.isMark) {
-                    result += `<mark>${escapeHtml(chunk.text)}</mark>`;
-                } else if (customRe && chunk.text) {
-                    let cLast = 0;
-                    chunk.text.replace(customRe, (m, ...a) => {
-                        const off = a[a.length - 2];
-                        result += escapeHtml(chunk.text.slice(cLast, off));
-                        result += `<span class="custom-hl">${escapeHtml(m)}</span>`;
-                        cLast = off + m.length;
-                        return m;
-                    });
-                    result += escapeHtml(chunk.text.slice(cLast));
+                    result += `<mark>${applyCustomHighlights(escapeHtml(chunk.text))}</mark>`;
                 } else {
-                    result += escapeHtml(chunk.text);
+                    result += applyCustomHighlights(escapeHtml(chunk.text));
                 }
             }
         } else if (customRe) {
-            line.replace(customRe, (m, ...a) => {
-                const off = a[a.length - 2];
-                result += escapeHtml(line.slice(lastIdx, off));
-                result += `<span class="custom-hl">${escapeHtml(m)}</span>`;
-                lastIdx = off + m.length;
-                return m;
-            });
-            result += escapeHtml(line.slice(lastIdx));
+            result = applyCustomHighlights(escapeHtml(line));
         }
         return result;
     }
@@ -72,7 +67,7 @@
         if (newLines.length > 0 && newLines[newLines.length - 1] === '') newLines.pop();
         const html = newLines.map(line => {
             state.lineCount++;
-            return `<span class="log-line" id="L${state.lineCount}"><a href="#L${state.lineCount}" class="line-number" onclick="highlightLine(${state.lineCount})">${state.lineCount}</a><span class="${classify(line)}">${highlightMatches(line, '', false)}</span></span>`;
+            return `<span class="log-line" id="L${state.lineCount}"><a href="#L${state.lineCount}" class="line-number" onclick="highlightLine(${state.lineCount})">${state.lineCount}</a><span class="${classify(line)}">${applyCustomHighlights(escapeHtml(line))}</span></span>`;
         }).join('\n');
         if (append && viewer.innerHTML !== '') viewer.insertAdjacentHTML('beforeend', '\n' + html);
         else viewer.innerHTML = html;
@@ -82,7 +77,28 @@
     async function loadFolder(path) { const response = await fetch(`${window.appBasePath}/api/files/list${path ? `?path=${encodeURIComponent(path)}` : ''}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to load folder.'); state.path = data.currentPath; state.files = data.files; $('current-path').value = data.currentPath; $('root-count').textContent = data.folders.length; let html = data.parentPath ? `<button class="folder" style="font-weight: 600; font-style: italic; color: var(--muted);" data-folder="${escapeHtml(data.parentPath)}">&#11014; [ Go Up ]</button>` : ''; html += data.folders.map(folder => `<button class="folder ${folder.path === state.path ? 'active' : ''}" data-folder="${escapeHtml(folder.path)}">${escapeHtml(folder.name)}</button>`).join(''); $('folder-tree').innerHTML = html || '<span class="file-meta">No subfolders</span>'; renderFiles(); }
     async function openFile(path) { state.selectedFile = path; const response = await fetch(`${window.appBasePath}/api/files/content?path=${encodeURIComponent(path)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to open file.'); $('viewer-title').textContent = data.fileName; renderOutput(data.content); $('connection-status').textContent = data.isTruncated ? 'PARTIAL READ' : 'READY'; $('pause-button').disabled = true; }
     async function tailFile(path) { state.selectedFile = path; if (typeof signalR === 'undefined') throw new Error('SignalR client could not load. Check network access and refresh the page.'); if (!state.connection) { state.connection = new signalR.HubConnectionBuilder().withUrl(`${window.appBasePath}/hubs/log`).withAutomaticReconnect().build(); state.connection.on('LogAppended', text => { if (!state.paused) renderOutput(text, true); }); await state.connection.start(); } await state.connection.invoke('Subscribe', path); state.paused = false; $('viewer-title').textContent = path.split(/[\\/]/).pop(); $('connection-status').textContent = 'LIVE'; $('connection-status').classList.add('live'); $('pause-button').disabled = false; $('pause-button').textContent = 'Pause'; renderOutput(''); }
-    async function searchContent() { if (!state.selectedFile) throw new Error('Open or tail a file before searching.'); const query = $('content-search').value; const regex = $('search-mode').value === 'regex'; const ctx = $('search-context').value; const response = await fetch(`${window.appBasePath}/api/files/search?path=${encodeURIComponent(state.selectedFile)}&query=${encodeURIComponent(query)}&regex=${regex}&context=${ctx}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to search file content.'); const matchCount = data.filter(d => d.isMatch).length; $('search-summary').textContent = `${matchCount} match${matchCount === 1 ? '' : 'es'}`; $('log-viewer').innerHTML = data.length ? data.map(result => `<span class="log-line ${result.isMatch ? '' : 'context-line'}" id="L${result.lineNumber}"><a href="#L${result.lineNumber}" class="line-number" onclick="highlightLine(${result.lineNumber})">${result.lineNumber}</a><span class="${classify(result.line)}">${result.isMatch ? highlightMatches(result.line, query, regex) : highlightMatches(result.line, '', false)}</span></span>`).join('\n') : 'No matching lines.'; state.lastSearchData = data; $('export-search-button').style.display = data.length ? 'inline-block' : 'none'; }
+    async function searchContent() { 
+        if (!state.selectedFile) throw new Error('Open or tail a file before searching.'); 
+        const query = $('content-search').value; 
+        if (!query) throw new Error('Please enter a search query.');
+        const regex = $('search-mode').value === 'regex'; 
+        const ctx = $('search-context').value; 
+        const response = await fetch(`${window.appBasePath}/api/files/search?path=${encodeURIComponent(state.selectedFile)}&query=${encodeURIComponent(query)}&regex=${regex}&context=${ctx}`); 
+        const data = await response.json(); 
+        if (!response.ok) throw new Error(data.error || 'Unable to search file content.'); 
+        const matchCount = data.filter(d => d.isMatch).length; 
+        $('search-summary').textContent = `${matchCount} match${matchCount === 1 ? '' : 'es'}`; 
+        $('log-viewer').innerHTML = data.length ? data.map((result, i) => {
+            let html = '';
+            if (i > 0 && result.lineNumber > data[i - 1].lineNumber + 1) {
+                html += `<span class="log-line divider" style="opacity: 0.5; padding: 4px 10px; font-style: italic; color: #888;">--- gap ---</span>\n`;
+            }
+            html += `<span class="log-line ${result.isMatch ? '' : 'context-line'}" id="L${result.lineNumber}"><a href="#L${result.lineNumber}" class="line-number" onclick="highlightLine(${result.lineNumber})">${result.lineNumber}</a><span class="${classify(result.line)}">${result.isMatch ? highlightMatches(result.line, query, regex) : highlightMatches(result.line, '', false)}</span></span>`;
+            return html;
+        }).join('\n') : 'No matching lines.'; 
+        state.lastSearchData = data; 
+        $('export-search-button').style.display = data.length ? 'inline-block' : 'none'; 
+    }
     document.addEventListener('click', async event => { const button = event.target.closest('button'); if (!button) return; try { if (button.dataset.folder) await loadFolder(button.dataset.folder); if (button.dataset.action === 'open') await openFile(button.dataset.path); if (button.dataset.action === 'tail') await tailFile(button.dataset.path); } catch (error) { renderOutput(`ERROR: ${error.message}`); } });
     const navigate = () => loadFolder($('current-path').value.trim()).catch(error => renderOutput(`ERROR: ${error.message}`));
     updateCustomRe();
