@@ -82,7 +82,7 @@ body.dark .topbar { background: rgba(15, 23, 42, 0.85); }
 .file-panel { min-width: 0; padding: 20px 4vw; display: flex; flex-direction: column; overflow: hidden; }
 .panel-heading, .viewer-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin-bottom: 12px; flex-shrink: 0; }
 .panel-heading h1, .viewer-heading h2 { margin: 6px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); transition: color 0.3s; }
-.viewer-heading h2 { color: #F8FAFC; }
+
 
 .file-tools, .viewer-actions { display: flex; align-items: center; gap: 12px; }
 .search { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 0 10px; transition: background-color 0.3s, border-color 0.3s; }
@@ -171,6 +171,13 @@ body.dark .status-pill.live { color: #000; border-color: var(--accent); backgrou
 .main-content.sidebar-collapsed .sidebar { width: 0 !important; flex: 0 0 0 !important; opacity: 0; pointer-events: none; overflow: hidden; }
 
 
-.sidebar { transition: width 0.3s ease, flex 0.3s ease, opacity 0.3s ease; }
+.sidebar { transition: opacity 0.15s ease; }
+
+
+
+.skeleton-line { height: 16px; background: #E2E8F0; margin-bottom: 8px; border-radius: 4px; animation: pulse 1.5s infinite ease-in-out; }
+body.dark .skeleton-line { background: #1E293B; }
+@keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
 
 
