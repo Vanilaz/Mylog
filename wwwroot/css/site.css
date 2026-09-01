@@ -207,7 +207,7 @@ main { height: 100dvh; overflow: auto; }
   border-radius: var(--radius-sm);
 }
 .icon-button { width: 44px; height: 44px; font-size: 18px; display: inline-flex; align-items: center; justify-content: center; }
-.text-button { min-height: 36px; padding: var(--space-2) var(--space-3); font-size: 13px; font-weight: 600; }
+.text-button { min-height: 36px; padding: var(--space-2) var(--space-3); font-size: 13px; font-weight: 600; text-decoration: none; }
 .icon-button:hover, .text-button:hover { background: var(--panel-hover); border-color: var(--primary); color: var(--primary); }
 .icon-button:active, .text-button:active { background: var(--mark-bg); }
 .text-button[disabled] { opacity: .5; cursor: not-allowed; }
@@ -223,17 +223,13 @@ main { height: 100dvh; overflow: auto; }
   border-right: 1px solid var(--line);
   background: var(--panel);
   overflow-y: auto;
-  transition: width var(--speed) ease, flex-basis var(--speed) ease, opacity var(--speed) ease;
+  /* Deliberately NOT transitioned. Animating width/flex-basis re-lays out the
+     whole flex row on every frame, which re-wraps every line in the log viewer;
+     with a few thousand lines open that produced ~150ms frames. Collapsing in a
+     single reflow keeps the toggle instant. */
 }
 .main-content.sidebar-collapsed .sidebar {
-  width: 0;
-  flex-basis: 0;
-  padding-left: 0;
-  padding-right: 0;
-  opacity: 0;
-  overflow: hidden;
-  pointer-events: none;
-  border-right: 0;
+  display: none;
 }
 
 .section-heading {
@@ -423,6 +419,11 @@ td.actions .row-actions { display: inline-flex; gap: var(--space-1); justify-con
 .font-size-group .text-button { border: 0; border-radius: 0; }
 .font-size-group .text-button + .text-button { border-left: 1px solid var(--line-strong); }
 
+.options-toggle { display: none; }
+.sheet-header { display: none; }
+.viewer-toggles { display: contents; }
+.sidebar-backdrop { display: none; }
+
 .content-search {
   display: flex;
   align-items: center;
@@ -464,7 +465,17 @@ td.actions .row-actions { display: inline-flex; gap: var(--space-1); justify-con
   overflow-wrap: anywhere;
 }
 .log-viewer.nowrap { white-space: pre; overflow-x: auto; overflow-wrap: normal; }
-.log-line { display: block; padding-left: 60px; text-indent: -60px; }
+.log-line {
+  display: block;
+  padding-left: 60px;
+  text-indent: -60px;
+  /* Let the browser skip layout for lines that are scrolled out of view. Without
+     this, anything that changes the viewer's width - collapsing the sidebar,
+     resizing the window - re-wraps every line in the buffer, which costs well
+     over 100ms once a few thousand lines are loaded. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 21px;
+}
 .log-line:hover { background: var(--panel-hover); }
 .log-line.highlight-line { background: var(--hl-bg); border-left: 3px solid var(--hl-border); padding-left: 57px; }
 .log-line.context-line { opacity: .65; }
@@ -482,7 +493,8 @@ td.actions .row-actions { display: inline-flex; gap: var(--space-1); justify-con
 
 .line-number {
   display: inline-block;
-  width: 48px;
+  min-width: 48px;
+  white-space: nowrap;   /* .log-viewer sets pre-wrap, which broke 4-digit numbers */
   margin-right: var(--space-3);
   color: var(--muted);
   user-select: none;
@@ -535,26 +547,209 @@ td.actions .row-actions { display: inline-flex; gap: var(--space-1); justify-con
 .error-row { text-align: center; color: var(--error); font-weight: 600; }
 
 /* -------------------------------------------------------- responsive --- */
-@media (max-width: 900px) {
-  .topbar { flex-wrap: wrap; padding: var(--space-2) var(--space-4); gap: var(--space-3); }
-  .pathbar { order: 3; flex-basis: 100%; max-width: none; }
-  .main-content { flex-direction: column; }
-  .sidebar {
-    width: auto;
-    flex: 0 0 auto;
-    max-height: 34dvh;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-  .main-content.sidebar-collapsed .sidebar { max-height: 0; padding-top: 0; padding-bottom: 0; border-bottom: 0; }
-  .file-panel, .viewer-panel { padding: var(--space-3) var(--space-4); }
-  .table-wrap { min-height: 240px; }
+/* Desktop-first refinements, then a real mobile layout. Breakpoints are driven
+   by where this UI actually breaks: the viewer toolbar stops fitting around
+   1100px, and the sidebar stops earning its column around 900px. */
+
+@media (max-width: 1200px) {
+  .pathbar { max-width: none; }
+  .file-panel, .viewer-panel { padding: var(--space-4); }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 1100px) {
+  .topbar { gap: var(--space-4); }
+  .search input { width: 140px; }
+}
+
+/* ---- Tablet and phone: the sidebar becomes an off-canvas drawer ---------- */
+@media (max-width: 900px) {
+  .topbar {
+    flex-wrap: wrap;
+    padding: var(--space-2) var(--space-3);
+    gap: var(--space-2) var(--space-3);
+    min-height: 0;
+  }
+  .brand-mark { font-size: 17px; }
+  .brand-mark small { display: none; }
+  .pathbar { order: 3; flex-basis: 100%; }
+  .pathbar .eyebrow { display: none; }
+  .top-actions { order: 2; }
+
+  .main-content { position: relative; }
+
+  /* Fixed, so opening and closing the drawer never re-lays out the log viewer. */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 60;
+    width: min(84vw, 320px);
+    flex-basis: auto;
+    max-height: none;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+    transform: translateX(0);
+    transition: transform var(--speed) ease, visibility var(--speed);
+    padding-top: max(var(--space-4), env(safe-area-inset-top));
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+  }
+  /* Overrides the desktop display:none: on a fixed drawer a transform slide is
+     free, because nothing else has to be laid out again. */
+  .main-content.sidebar-collapsed .sidebar {
+    display: block;
+    transform: translateX(-100%);
+    visibility: hidden;
+  }
+
+  .sidebar-backdrop {
+    display: block;          /* the base rule keeps it off on wide layouts */
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    background: rgba(0, 0, 0, .45);
+    border: 0;
+    padding: 0;
+  }
+
+  .file-panel, .viewer-panel { padding: var(--space-3); }
+  .panel-heading, .viewer-heading { gap: var(--space-2); }
+  .panel-heading h1, .viewer-heading h2 { font-size: 18px; }
+
+  /* Toolbar buttons scroll sideways in their own strip rather than stacking
+     into a wall of controls above the log. */
+  .viewer-actions {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: var(--space-1);
+    scrollbar-width: thin;
+  }
+  .viewer-actions > * { flex: 0 0 auto; }
+
+  .options-toggle { display: inline-flex; }
+  /* A bottom sheet, not a dropdown: .viewer-actions scrolls horizontally, and an
+     absolutely positioned child of a scroll container gets clipped out of sight.
+     position:fixed escapes that, and a sheet is easier to reach one-handed. */
+  .viewer-toggles {
+    display: none;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 70;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-1);
+    padding: var(--space-4);
+    padding-bottom: max(var(--space-4), env(safe-area-inset-bottom));
+    background: var(--panel);
+    border-top: 1px solid var(--line-strong);
+    border-radius: var(--radius) var(--radius) 0 0;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, .22);
+    /* Never swallow the whole screen on a short landscape phone. */
+    max-height: 60dvh;
+    overflow-y: auto;
+  }
+  /* The sheet can cover its own trigger on a short landscape screen, so it
+     carries its own dismiss control rather than relying on tapping outside. */
+  .viewer-toggles .sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font: 600 11px/1.6 'Fira Code', monospace;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  .viewer-toggles.open { display: flex; }
+  .viewer-toggles .auto-scroll { min-height: 44px; width: 100%; }
+
+  .content-search { gap: var(--space-2); }
+  .content-search input { flex: 1 1 100%; min-width: 0; }
+  .content-search select { flex: 1 1 auto; }
+  .search-summary { margin-left: 0; }
+}
+
+/* ---- Phone: stack the file table into cards ----------------------------- */
+@media (max-width: 620px) {
+  .file-tools { width: 100%; }
+  .search { flex: 1; }
   .search input { width: 100%; }
-  .file-tools, .viewer-actions { gap: var(--space-2); }
-  .search-summary { margin-left: 0; flex-basis: 100%; }
+
+  .table-wrap table { min-width: 0; }
+  .table-wrap thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .table-wrap tbody tr {
+    display: block;
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--line);
+  }
+  .table-wrap tbody tr:last-child { border-bottom: 0; }
+  .table-wrap td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 2px 0;
+    border: 0;
+    text-align: left;
+  }
+  /* Each cell carries its own header, since the real one is hidden. */
+  .table-wrap td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    color: var(--muted);
+    font: 600 10px/1.6 'Fira Code', monospace;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+  .table-wrap td:first-child { padding-bottom: var(--space-2); }
+  .table-wrap td:first-child::before { content: none; }
+  .file-name { font-size: 15px; word-break: break-word; }
+  td.actions { padding-top: var(--space-3); }
+  td.actions .row-actions { width: 100%; justify-content: stretch; }
+  td.actions .row-actions > * { flex: 1; justify-content: center; text-align: center; }
+  .table-wrap tbody tr:hover td { background: transparent; }
+
+  .error-row { display: block; }
+}
+
+@media (max-width: 400px) {
+  .brand-mark span:not(.brand-dot) { font-size: 16px; }
+  .icon-button { width: 40px; height: 40px; }
+  .file-panel, .viewer-panel { padding: var(--space-2); }
+  .log-viewer { padding: var(--space-2); }
+  .log-line { padding-left: 52px; text-indent: -52px; }
+  .log-line.highlight-line { padding-left: 49px; }
+  .line-number { min-width: 40px; margin-right: var(--space-2); padding-right: var(--space-1); }
+}
+
+/* Coarse pointers get full-size hit targets regardless of viewport width. */
+/* Every interactive target clears 44x44 on a touch screen, whatever the width. */
+@media (pointer: coarse) {
+  .text-button { min-height: 44px; }
+  .icon-button { width: 44px; height: 44px; }
+  .tree-toggle { width: 44px; height: 44px; }
+  .folder, .tree-label { padding-top: var(--space-3); padding-bottom: var(--space-3); }
+  .section-heading .root-reset { min-height: 44px; padding-inline: var(--space-3); }
+  .content-search input, .content-search select { min-height: 44px; }
+  .pathbar input, .search input { min-height: 44px; }
+  /* The label is the hit target - clicking it toggles the box - so it is the
+     thing that has to clear 44px, not the 20px box itself. */
+  .filter, .auto-scroll, .viewer-toggles .auto-scroll { min-height: 44px; }
+  .filter input, .auto-scroll input { width: 20px; height: 20px; }
+}
+
+/* Short landscape phones: give the log as much height as possible. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .topbar { min-height: 0; }
+  .viewer-heading .custom-highlight-wrap { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
