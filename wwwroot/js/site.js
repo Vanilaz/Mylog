@@ -76,8 +76,12 @@
         const viewer = $('log-viewer');
         if (!append) { viewer.innerHTML = ''; state.lineCount = 0; $('export-search-button').style.display = 'none'; state.lastSearchData = null; }
         if (!content && !append) return;
-        const newLines = content.split('\n');
+        let newLines = content.split('\n');
         if (newLines.length > 0 && newLines[newLines.length - 1] === '') newLines.pop();
+        if (!append && newLines.length > 2000) {
+            newLines = newLines.slice(-2000);
+            viewer.insertAdjacentHTML('beforeend', '<div style="color: var(--warn); padding: 8px; text-align: center; border-bottom: 1px solid #334155; margin-bottom: 10px;">[ Showing last 2000 lines for performance. Download file to see full content. ]</div>\n');
+        }
         const html = newLines.map(line => {
             state.lineCount++;
             return `<span class="log-line" id="L${state.lineCount}"><a href="#L${state.lineCount}" class="line-number" onclick="highlightLine(${state.lineCount})">${state.lineCount}</a><span class="${classify(line)}">${applyCustomHighlights(escapeHtml(tryFormatJson(line)))}</span></span>`;
