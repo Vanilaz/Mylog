@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - MyLog</title>
-    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/site.css?v=20260901" />
     <link rel="stylesheet" href="~/MyLog.styles.css" asp-append-version="true" />
     <link rel="icon" type="image/x-icon" href="~/favicon.ico" />
 </head>
@@ -20,7 +20,7 @@
         window.appBasePath = '@Url.Content("~")';
         if (window.appBasePath === '/') window.appBasePath = '';
     </script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/site.js?v=20260901"></script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
