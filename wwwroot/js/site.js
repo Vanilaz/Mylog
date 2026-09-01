@@ -74,30 +74,46 @@
         if ($('auto-scroll').checked) viewer.scrollTop = viewer.scrollHeight; 
     }
     function renderFiles() { const query = $('search-input').value.toLowerCase(); const visible = state.files.filter(file => (!query || file.name.toLowerCase().includes(query)) && (!$('logs-only').checked || file.extension.toLowerCase() === '.log')); visible.sort((a, b) => { const left = state.sort === 'size' ? a.size : state.sort === 'modified' ? new Date(a.lastModified) : a.name; const right = state.sort === 'size' ? b.size : state.sort === 'modified' ? new Date(b.lastModified) : b.name; return (left > right ? 1 : left < right ? -1 : 0) * (state.ascending ? 1 : -1); }); $('file-list').innerHTML = visible.map(file => `<tr><td><span class="file-name">${escapeHtml(file.name)}</span></td><td class="file-meta">${formatSize(file.size)}</td><td class="file-meta">${formatDate(file.lastModified)}</td><td class="file-meta">${escapeHtml(file.extension || 'file')}</td><td class="actions"><button data-action="open" data-path="${escapeHtml(file.path)}">Open</button><button data-action="tail" data-path="${escapeHtml(file.path)}">Tail</button><a href="${window.appBasePath}/api/files/download?path=${encodeURIComponent(file.path)}" download><button>Download</button></a></td></tr>`).join(''); $('empty-state').style.display = visible.length ? 'none' : 'block'; }
-    async function loadFolder(path) { const response = await fetch(`${window.appBasePath}/api/files/list${path ? `?path=${encodeURIComponent(path)}` : ''}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to load folder.'); state.path = data.currentPath; state.files = data.files; $('current-path').value = data.currentPath; $('root-count').textContent = data.folders.length; let html = data.parentPath ? `<button class="folder" style="font-weight: 600; font-style: italic; color: var(--muted);" data-folder="${escapeHtml(data.parentPath)}">&#11014; [ Go Up ]</button>` : ''; html += data.folders.map(folder => `<button class="folder ${folder.path === state.path ? 'active' : ''}" data-folder="${escapeHtml(folder.path)}">${escapeHtml(folder.name)}</button>`).join(''); $('folder-tree').innerHTML = html || '<span class="file-meta">No subfolders</span>'; renderFiles(); }
-    async function openFile(path) { state.selectedFile = path; const response = await fetch(`${window.appBasePath}/api/files/content?path=${encodeURIComponent(path)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to open file.'); $('viewer-title').textContent = data.fileName; renderOutput(data.content); $('connection-status').textContent = data.isTruncated ? 'PARTIAL READ' : 'READY'; $('pause-button').disabled = true; }
-    async function tailFile(path) { state.selectedFile = path; if (typeof signalR === 'undefined') throw new Error('SignalR client could not load. Check network access and refresh the page.'); if (!state.connection) { state.connection = new signalR.HubConnectionBuilder().withUrl(`${window.appBasePath}/hubs/log`).withAutomaticReconnect().build(); state.connection.on('LogAppended', text => { if (!state.paused) renderOutput(text, true); }); await state.connection.start(); } await state.connection.invoke('Subscribe', path); state.paused = false; $('viewer-title').textContent = path.split(/[\\/]/).pop(); $('connection-status').textContent = 'LIVE'; $('connection-status').classList.add('live'); $('pause-button').disabled = false; $('pause-button').textContent = 'Pause'; renderOutput(''); }
+    function showLoading(text) {
+        const overlay = $('loading-overlay');
+        if (overlay) {
+            $('loading-text').textContent = text || 'LOADING...';
+            overlay.classList.remove('hidden');
+        }
+    }
+    function hideLoading() {
+        const overlay = $('loading-overlay');
+        if (overlay) overlay.classList.add('hidden');
+    }
+    async function loadFolder(path) { showLoading('LOADING DIRECTORY...'); try { const response = await fetch(`${window.appBasePath}/api/files/list${path ? `?path=${encodeURIComponent(path)}` : ''}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to load folder.'); state.path = data.currentPath; state.files = data.files; $('current-path').value = data.currentPath; $('root-count').textContent = data.folders.length; let html = data.parentPath ? `<button class="folder" style="font-weight: 600; font-style: italic; color: var(--muted);" data-folder="${escapeHtml(data.parentPath)}">&#11014; [ Go Up ]</button>` : ''; html += data.folders.map(folder => `<button class="folder ${folder.path === state.path ? 'active' : ''}" data-folder="${escapeHtml(folder.path)}">${escapeHtml(folder.name)}</button>`).join(''); $('folder-tree').innerHTML = html || '<span class="file-meta">No subfolders</span>'; renderFiles(); } finally { hideLoading(); } }
+    async function openFile(path) { showLoading('OPENING FILE...'); try { state.selectedFile = path; const response = await fetch(`${window.appBasePath}/api/files/content?path=${encodeURIComponent(path)}`); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Unable to open file.'); $('viewer-title').textContent = data.fileName; renderOutput(data.content); $('connection-status').textContent = data.isTruncated ? 'PARTIAL READ' : 'READY'; $('pause-button').disabled = true; } finally { hideLoading(); } }
+    async function tailFile(path) { showLoading('CONNECTING LIVE TAIL...'); try { state.selectedFile = path; if (typeof signalR === 'undefined') throw new Error('SignalR client could not load. Check network access and refresh the page.'); if (!state.connection) { state.connection = new signalR.HubConnectionBuilder().withUrl(`${window.appBasePath}/hubs/log`).withAutomaticReconnect().build(); state.connection.on('LogAppended', text => { if (!state.paused) renderOutput(text, true); }); await state.connection.start(); } await state.connection.invoke('Subscribe', path); state.paused = false; $('viewer-title').textContent = path.split(/[\\/]/).pop(); $('connection-status').textContent = 'LIVE'; $('connection-status').classList.add('live'); $('pause-button').disabled = false; $('pause-button').textContent = 'Pause'; renderOutput(''); } finally { hideLoading(); } }
     async function searchContent() { 
-        if (!state.selectedFile) throw new Error('Open or tail a file before searching.'); 
-        const query = $('content-search').value; 
-        if (!query) throw new Error('Please enter a search query.');
-        const regex = $('search-mode').value === 'regex'; 
-        const ctx = $('search-context').value; 
-        const response = await fetch(`${window.appBasePath}/api/files/search?path=${encodeURIComponent(state.selectedFile)}&query=${encodeURIComponent(query)}&regex=${regex}&context=${ctx}`); 
-        const data = await response.json(); 
-        if (!response.ok) throw new Error(data.error || 'Unable to search file content.'); 
-        const matchCount = data.filter(d => d.isMatch).length; 
-        $('search-summary').textContent = `${matchCount} match${matchCount === 1 ? '' : 'es'}`; 
-        $('log-viewer').innerHTML = data.length ? data.map((result, i) => {
-            let html = '';
-            if (i > 0 && result.lineNumber > data[i - 1].lineNumber + 1) {
-                html += `<span class="log-line divider" style="opacity: 0.5; padding: 4px 10px; font-style: italic; color: #888;">--- gap ---</span>\n`;
-            }
-            html += `<span class="log-line ${result.isMatch ? '' : 'context-line'}" id="L${result.lineNumber}"><a href="#L${result.lineNumber}" class="line-number" onclick="highlightLine(${result.lineNumber})">${result.lineNumber}</a><span class="${classify(result.line)}">${result.isMatch ? highlightMatches(result.line, query, regex) : highlightMatches(result.line, '', false)}</span></span>`;
-            return html;
-        }).join('\n') : 'No matching lines.'; 
-        state.lastSearchData = data; 
-        $('export-search-button').style.display = data.length ? 'inline-block' : 'none'; 
+        showLoading('SEARCHING LOGS...'); 
+        try {
+            if (!state.selectedFile) throw new Error('Open or tail a file before searching.'); 
+            const query = $('content-search').value; 
+            if (!query) throw new Error('Please enter a search query.');
+            const regex = $('search-mode').value === 'regex'; 
+            const ctx = $('search-context').value; 
+            const response = await fetch(`${window.appBasePath}/api/files/search?path=${encodeURIComponent(state.selectedFile)}&query=${encodeURIComponent(query)}&regex=${regex}&context=${ctx}`); 
+            const data = await response.json(); 
+            if (!response.ok) throw new Error(data.error || 'Unable to search file content.'); 
+            const matchCount = data.filter(d => d.isMatch).length; 
+            $('search-summary').textContent = `${matchCount} match${matchCount === 1 ? '' : 'es'}`; 
+            $('log-viewer').innerHTML = data.length ? data.map((result, i) => {
+                let html = '';
+                if (i > 0 && result.lineNumber > data[i - 1].lineNumber + 1) {
+                    html += `<span class="log-line divider" style="opacity: 0.5; padding: 4px 10px; font-style: italic; color: #888;">--- gap ---</span>\n`;
+                }
+                html += `<span class="log-line ${result.isMatch ? '' : 'context-line'}" id="L${result.lineNumber}"><a href="#L${result.lineNumber}" class="line-number" onclick="highlightLine(${result.lineNumber})">${result.lineNumber}</a><span class="${classify(result.line)}">${result.isMatch ? highlightMatches(result.line, query, regex) : highlightMatches(result.line, '', false)}</span></span>`;
+                return html;
+            }).join('\n') : 'No matching lines.'; 
+            state.lastSearchData = data; 
+            $('export-search-button').style.display = data.length ? 'inline-block' : 'none'; 
+        } finally {
+            hideLoading();
+        }
     }
     document.addEventListener('click', async event => { const button = event.target.closest('button'); if (!button) return; try { if (button.dataset.folder) await loadFolder(button.dataset.folder); if (button.dataset.action === 'open') await openFile(button.dataset.path); if (button.dataset.action === 'tail') await tailFile(button.dataset.path); } catch (error) { renderOutput(`ERROR: ${error.message}`); } });
     const navigate = () => loadFolder($('current-path').value.trim()).catch(error => renderOutput(`ERROR: ${error.message}`));
