@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Options;
+﻿using Microsoft.Extensions.Options;
 using MyLog.Models;
 using MyLog.Options;
 using System.Text.RegularExpressions;
@@ -107,9 +107,7 @@ public sealed class FileBrowserService : IFileBrowserService
         int afterContextRemaining = 0;
         var addedLineNumbers = new HashSet<int>();
 
-        while (await reader.ReadLineAsync(cancellationToken) is { } line)
-        {
-            lineNumber++;
+        while (await reader.ReadLineAsync(cancellationToken) is { } line) { if (results.Count > 2000) break; lineNumber++;
             bool isMatch = matcher?.IsMatch(line) == true || matcher is null && line.Contains(query, StringComparison.OrdinalIgnoreCase);
             var currentDto = new FileSearchResultDto(lineNumber, line, isMatch);
 
