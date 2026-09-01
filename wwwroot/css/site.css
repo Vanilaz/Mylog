@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap');
+﻿@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
   /* LIGHT MODE (DEFAULT) */
@@ -12,9 +12,9 @@
   --teal: #0f766e;
   --viewer: #ffffff;
   --code: #334155;
-  --error: #e11d48;
-  --warn: #d97706;
-  --info: #059669;
+  --error: #FF0000;
+  --warn: #D4AF37;
+  --info: #000000;
   --hl-bg: rgba(234, 179, 8, 0.2);
   --hl-border: #EAB308;
 }
@@ -31,9 +31,9 @@ body.dark {
   --teal: #FF003C;
   --viewer: #050505;
   --code: #00F0FF;
-  --error: #FF003C;
-  --warn: #FCEE0A;
-  --info: #39FF14;
+  --error: #FF0000;
+  --warn: #FFFF00;
+  --info: #FFFFFF;
   --hl-bg: rgba(255, 0, 60, 0.25);
   --hl-border: #FF003C;
 }
@@ -172,4 +172,5 @@ body.dark .status-pill.live { color: #000; border-color: var(--accent); backgrou
 
 
 .sidebar { transition: width 0.3s ease, flex 0.3s ease, opacity 0.3s ease; }
+
 
