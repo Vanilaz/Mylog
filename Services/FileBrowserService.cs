@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Options;
 using MyLog.Models;
 using MyLog.Options;
 using System.Text.RegularExpressions;
@@ -69,13 +69,15 @@ public sealed class FileBrowserService : IFileBrowserService
         }
 
         using var reader = new StreamReader(stream);
-        if (isTruncated)
-        {
-            // Discard the first partial line to ensure clean output
-            await reader.ReadLineAsync(cancellationToken);
-        }
+        if (isTruncated) await reader.ReadLineAsync(cancellationToken);
 
-        var text = await reader.ReadToEndAsync(cancellationToken);
+        var ringBuffer = new Queue<string>(2000);
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            if (ringBuffer.Count >= 2000) ringBuffer.Dequeue();
+            ringBuffer.Enqueue(line);
+        }
+        var text = string.Join("\n", ringBuffer);
         return new FileContentDto(info.Name, info.Length, info.LastWriteTime, text, isTruncated);
     }
 
