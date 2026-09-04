@@ -12,6 +12,7 @@
             <button id="go-button" class="text-button" title="Go to location">Go</button>
         </div>
         <div class="top-actions">
+            <a href="~/docs/MyLog_User_Manual.html" target="_blank" class="text-button btn-tool" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 0.82rem; font-weight: 600;" title="เปิดคู่มือการใช้งานระบบ MyLog (HTML & PDF)">📖 คู่มือการใช้งาน</a>
             <button id="toggle-sidebar" class="icon-button" aria-label="Toggle sidebar" aria-expanded="true" aria-controls="sidebar" title="Toggle sidebar">&#9776;</button>
             <button id="refresh-button" class="icon-button" aria-label="Refresh file list" title="Refresh file list">&#8635;</button>
             <button id="theme-button" class="icon-button" aria-label="Toggle dark mode" aria-pressed="false" title="Toggle dark mode">&#9681;</button>
@@ -21,12 +22,44 @@
     <div class="main-content">
         <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
         <aside class="sidebar" id="sidebar" aria-label="Allowed folders">
-            <div class="section-heading">
-                <button type="button" id="reset-root" class="root-reset" title="Return to the root folder">ROOTS</button>
+            <div class="sidebar-tabs">
+                <button id="nav-local" class="tab-button active">Local</button>
+                <button id="nav-cluster" class="tab-button">Cluster / LB</button>
+                <button id="nav-remote" class="tab-button">Remote</button>
+            </div>
+            
+            <div id="cluster-sidebar-section" hidden>
+                <div class="section-heading">
+                    <span class="root-reset">CLUSTERS</span>
+                    <button id="refresh-clusters" class="icon-button" title="Refresh Clusters">&#8635;</button>
+                </div>
+                <div class="remote-dropdowns">
+                    <select id="cluster-select" aria-label="Select Cluster">
+                        <option value="">-- Select Cluster / Load Balancer --</option>
+                    </select>
+                    <div id="cluster-nodes-status" class="cluster-nodes-status"></div>
+                </div>
+                <div id="cluster-file-tree" class="folder-tree"></div>
+                <p class="sidebar-note">Aggregates logs across all cluster nodes behind the load balancer.</p>
+            </div>
+            
+            <div id="local-sidebar-section">
+                <div class="section-heading">
+                    <button type="button" id="reset-root" class="root-reset" title="Return to the root folder">ROOTS</button>
                 <span id="root-count" aria-label="Root folder count">0</span>
             </div>
-            <div id="folder-tree" class="folder-tree"></div>
-            <p class="sidebar-note">Configured folders are enforced by the server.</p>
+                <div id="folder-tree" class="folder-tree"></div>
+                <p class="sidebar-note">Configured folders are enforced by the server.</p>
+            </div>
+
+            <div id="remote-sidebar-section" hidden>
+                <div class="section-heading">
+                    <button type="button" id="reset-remote-root" class="root-reset" title="Return to All Projects">PROJECTS</button>
+                    <button id="refresh-projects" class="icon-button" title="Refresh Projects">&#8635;</button>
+                </div>
+                <div id="remote-file-tree" class="folder-tree"></div>
+                <p id="remote-status" class="sidebar-note">Gateway-connected remote logs & folders.</p>
+            </div>
         </aside>
 
         <div class="editor-area">
@@ -41,8 +74,24 @@
                             <span aria-hidden="true">&#8981;</span>
                             <input id="search-input" placeholder="Find a file" aria-label="Filter files by name" />
                         </label>
-                        <label class="filter"><input id="logs-only" type="checkbox" /> .log only</label>
+                        <div class="file-tools-row">
+                            <label class="filter" for="logs-only"><input id="logs-only" type="checkbox" /> .log only</label>
+                            <button id="folder-search-toggle" class="text-button btn-tool" title="Search keyword across all logs in this folder">🔍 Search in folder</button>
+                            <button id="download-zip-button" class="text-button btn-tool" title="Download current folder as ZIP">⬇ Download ZIP</button>
+                        </div>
                     </div>
+                </div>
+                <div id="folder-search-bar" class="folder-search-bar" hidden>
+                    <input id="folder-search-input" placeholder="Search text or Trace ID in all logs in this folder..." aria-label="Search in folder" />
+                    <label class="auto-scroll"><input id="folder-search-regex" type="checkbox" /> Regex</label>
+                    <button id="folder-search-btn" class="text-button">Search Folder</button>
+                    <button id="folder-search-close" class="text-button">✕</button>
+                </div>
+                <div id="folder-search-results" class="folder-search-results" hidden>
+                    <div class="results-header">
+                        <span id="folder-search-count">0 matches found</span>
+                    </div>
+                    <div id="folder-search-list" class="folder-search-list"></div>
                 </div>
                 <div class="table-wrap">
                     <table>
@@ -66,6 +115,19 @@
                     <div class="spinner" aria-hidden="true"></div>
                     <div id="loading-text" class="loading-text">LOADING...</div>
                 </div>
+                <!-- Mobile Stats Ribbon (Mockup Component) -->
+                <div id="mobile-stats-ribbon" class="mobile-stats-ribbon">
+                    <div class="mobile-ribbon-left">
+                        <span id="mobile-status-tag" class="mobile-status-tag">🟢 READY</span>
+                        <span id="mobile-filename-chip" class="mobile-filename-chip" title="Tap to switch file">No file open</span>
+                    </div>
+                    <div class="mobile-stat-counts">
+                        <button type="button" id="mobile-ribbon-err" class="stat-pill-err" title="Toggle Errors Only">🚨 <span id="mobile-err-count">0</span> Errors</button>
+                        <span id="mobile-ribbon-wrn" class="stat-pill-wrn">⚠️ <span id="mobile-wrn-count">0</span> Warn</span>
+                        <span id="mobile-ribbon-total" class="stat-pill-total"><span id="mobile-line-count">0</span> lines</span>
+                    </div>
+                </div>
+
                 <div class="viewer-heading">
                     <div>
                         <span class="eyebrow">Live output</span>
@@ -73,9 +135,16 @@
                         <div class="custom-highlight-wrap">
                             <input id="custom-highlight" placeholder="Custom highlight (e.g. ID1, thread-2)" aria-label="Custom highlight keywords, comma separated" />
                         </div>
+                        <div id="cluster-node-tabs" class="cluster-node-tabs" hidden>
+                            <span class="cluster-badge-label">Nodes:</span>
+                            <div id="cluster-node-pill-group" class="cluster-node-pill-group"></div>
+                        </div>
                     </div>
                     <div class="viewer-actions">
                         <span id="connection-status" class="status-pill" role="status">OFFLINE</span>
+                        <button id="download-cluster-zip-button" class="text-button" title="Download cluster logs from all nodes as ZIP" hidden>📦 Cluster ZIP</button>
+                        <button id="download-cluster-log-button" class="text-button" title="Download concatenated cluster log as a single .log file" hidden>📑 Cluster .log</button>
+                        <button id="download-remote-log-button" class="text-button" title="Download remote log file" hidden>⬇ Download</button>
                         <button id="close-file-button" class="text-button" title="Close file and return to browser">Close File</button>
                         <button id="pause-button" class="text-button" disabled>Pause</button>
                         <button id="clear-button" class="text-button">Clear</button>
@@ -85,6 +154,10 @@
                             <button id="font-dec" class="text-button" aria-label="Decrease log font size" title="Decrease font size">A-</button>
                             <button id="font-inc" class="text-button" aria-label="Increase log font size" title="Increase font size">A+</button>
                         </div>
+                        <button id="analytics-button" class="text-button" title="View log error analytics & hourly histogram">📊 Analytics</button>
+                        <button id="time-filter-toggle" class="text-button" title="Filter log lines by time range">⏱️ Time</button>
+                        <button id="bookmarks-toggle" class="text-button" title="View pinned log bookmarks">⭐ Bookmarks (0)</button>
+                        <button id="folder-search-viewer-toggle" class="text-button" title="Search across all files in this folder">🔍 Search in folder</button>
                         <button id="options-toggle" class="text-button options-toggle" aria-expanded="false" aria-controls="viewer-toggles">Options</button>
                         <div class="viewer-toggles" id="viewer-toggles">
                             <div class="sheet-header">
@@ -99,24 +172,180 @@
                         </div>
                     </div>
                 </div>
+
+                <div id="analytics-dashboard" class="analytics-dashboard" hidden>
+                    <div class="analytics-header">
+                        <div class="analytics-title">
+                            <h3>📊 Log Analytics & Distribution</h3>
+                            <span id="analytics-timestamp-range" class="analytics-sub">Scan complete</span>
+                        </div>
+                        <button type="button" id="analytics-close" class="text-button" title="Close Analytics">✕</button>
+                    </div>
+
+                    <div class="analytics-kpi-grid">
+                        <div class="kpi-card kpi-error">
+                            <span class="kpi-label">ERRORS / CRITICAL</span>
+                            <span id="kpi-errors" class="kpi-value">0</span>
+                        </div>
+                        <div class="kpi-card kpi-warn">
+                            <span class="kpi-label">WARNINGS</span>
+                            <span id="kpi-warns" class="kpi-value">0</span>
+                        </div>
+                        <div class="kpi-card kpi-info">
+                            <span class="kpi-label">INFO LOGS</span>
+                            <span id="kpi-infos" class="kpi-value">0</span>
+                        </div>
+                        <div class="kpi-card kpi-total">
+                            <span class="kpi-label">SCANNED LINES</span>
+                            <span id="kpi-total" class="kpi-value">0</span>
+                        </div>
+                    </div>
+
+                    <div class="analytics-body-grid">
+                        <div class="analytics-chart-panel">
+                            <div class="panel-subheading">Hourly Error & Warning Distribution (Click a bar to filter)</div>
+                            <div class="canvas-container">
+                                <canvas id="analytics-canvas" width="600" height="150"></canvas>
+                            </div>
+                        </div>
+                        <div class="analytics-top-errors-panel">
+                            <div class="panel-subheading">Top Error Patterns (Click to search)</div>
+                            <div id="analytics-top-errors" class="top-errors-list">
+                                <span class="empty-hint">No errors detected.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="content-search">
                     <input id="content-search" placeholder="Search file content" aria-label="Search file content" />
+                    <select id="quick-filter-select" aria-label="Pre-built quick filters">
+                        <option value="">⚡ Quick Filters</option>
+                        <option value="errors">💥 Errors & Exceptions</option>
+                        <option value="warnings">⚠️ Warnings</option>
+                        <option value="http">🌐 HTTP 4xx / 5xx</option>
+                        <option value="slow">⏱️ Slow Requests (>1s)</option>
+                        <option value="guid">🆔 Trace ID / GUID</option>
+                        <option value="timeout">🔌 Timeouts & Sockets</option>
+                    </select>
                     <select id="search-mode" aria-label="Search mode">
                         <option value="text">Normal text</option>
                         <option value="regex">Regular expression</option>
                     </select>
                     <select id="search-context" aria-label="Search context">
                         <option value="0">No context</option>
+                        <option value="1">&#177;1 line</option>
                         <option value="2">&#177;2 lines</option>
+                        <option value="3">&#177;3 lines</option>
                         <option value="5">&#177;5 lines</option>
                         <option value="10">&#177;10 lines</option>
                     </select>
                     <button id="search-button" class="text-button">Search</button>
+                    <button id="folder-search-viewer-btn" class="text-button" title="Search this query across ALL log files in current folder">📁 In Folder</button>
                     <button id="export-search-button" class="text-button" title="Download search results" hidden>Export</button>
                     <span id="search-summary" class="search-summary" role="status" aria-live="polite"></span>
                 </div>
+
+                <div id="folder-search-results-viewer" class="folder-search-results" hidden>
+                    <div class="results-header" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span id="folder-search-count-viewer">0 matches found in folder</span>
+                        <button type="button" id="folder-search-close-viewer" class="text-button" style="padding: 2px 8px;">✕ Close</button>
+                    </div>
+                    <div id="folder-search-list-viewer" class="folder-search-list"></div>
+                </div>
+
+                <div id="time-filter-bar" class="time-filter-bar" hidden>
+                    <span>⏱️ Filter Range:</span>
+                    <input id="time-start" placeholder="Start e.g. 02:00:00" style="width: 140px;" />
+                    <span>to</span>
+                    <input id="time-end" placeholder="End e.g. 02:45:00" style="width: 140px;" />
+                    <button id="apply-time-filter" class="text-button">Apply</button>
+                    <button id="reset-time-filter" class="text-button">Reset</button>
+                    <span id="time-filter-summary" class="time-filter-summary"></span>
+                    <button id="close-time-filter" class="text-button" style="margin-left: 8px;">✕</button>
+                </div>
+
+                <div id="flow-banner" class="flow-banner" hidden>
+                    <div class="flow-info">
+                        <span class="flow-icon">🔗</span>
+                        <span class="flow-title">Transaction Flow:</span>
+                        <code id="flow-trace-id" class="flow-code"></code>
+                        <span id="flow-count-badge" class="flow-badge">Tracing...</span>
+                    </div>
+                    <div class="flow-actions">
+                        <button type="button" id="copy-flow-btn" class="text-button" title="Copy full transaction flow to clipboard">📋 Copy Flow</button>
+                        <button type="button" id="exit-flow-btn" class="text-button" title="Exit transaction flow">✕ Exit Flow</button>
+                    </div>
+                </div>
+
+                <div id="bookmarks-panel" class="bookmarks-panel" hidden>
+                    <div class="bookmarks-header">
+                        <div class="bookmarks-title">
+                            <h3>⭐ Pinned Bookmarks (<span id="bookmarks-count">0</span>)</h3>
+                            <span class="bookmarks-sub">Click any bookmark to jump to line</span>
+                        </div>
+                        <div class="bookmarks-header-actions">
+                            <button type="button" id="copy-bookmarks-btn" class="text-button" title="Copy formatted bookmarks summary">📋 Copy All</button>
+                            <button type="button" id="clear-bookmarks-btn" class="text-button" title="Clear all bookmarks">🗑️ Clear</button>
+                            <button type="button" id="close-bookmarks-btn" class="text-button" title="Close bookmarks drawer">✕</button>
+                        </div>
+                    </div>
+                    <div id="bookmarks-list" class="bookmarks-list">
+                        <span class="empty-hint" style="padding: 12px; display: block;">No bookmarks yet. Click ☆ next to any line number to pin it.</span>
+                    </div>
+                </div>
+
                 <pre id="log-viewer" class="log-viewer show-lines" tabindex="0" aria-label="Log content">Open a file to read it, or tail a log to watch new lines arrive.</pre>
+
+                <!-- Mobile Sticky Command Bar (Thumb Zone) -->
+                <div id="mobile-command-bar" class="mobile-command-bar" aria-label="Mobile quick actions">
+                    <button type="button" id="mobile-errors-only-btn" class="mobile-cmd-pill" title="Toggle errors and critical logs only">
+                        <span class="cmd-icon">🚨</span>
+                        <span>Errors Only</span>
+                    </button>
+                    <div class="mobile-cmd-icons">
+                        <button type="button" id="mobile-wrap-btn" class="mobile-icon-btn active" title="Toggle Word Wrap">↩️</button>
+                        <button type="button" id="mobile-search-btn" class="mobile-icon-btn" title="Quick Search">🔍</button>
+                        <button type="button" id="mobile-bookmarks-btn" class="mobile-icon-btn" title="Bookmarks">⭐<span id="mobile-bookmarks-badge" class="cmd-badge" hidden>0</span></button>
+                        <button type="button" id="mobile-analytics-btn" class="mobile-icon-btn" title="Analytics">📊</button>
+                        <button type="button" id="mobile-scroll-btn" class="mobile-icon-btn mobile-fab-scroll" title="Scroll to latest line">⬇️</button>
+                    </div>
+                </div>
+
+                <!-- Tap-to-Inspect Bottom Sheet -->
+                <div id="line-inspector-sheet" class="line-inspector-overlay" hidden>
+                    <div class="line-inspector-sheet">
+                        <div class="inspector-drag-handle"></div>
+                        <div class="inspector-header">
+                            <div class="inspector-title-group">
+                                <span id="inspector-badge" class="inspector-badge info">INFO</span>
+                                <span id="inspector-line-num" class="inspector-line-num">Line 0</span>
+                                <span id="inspector-time" class="inspector-time"></span>
+                            </div>
+                            <button type="button" id="inspector-close-btn" class="inspector-close-btn" aria-label="Close">✕</button>
+                        </div>
+
+                        <div id="inspector-token-card" class="inspector-token-card" hidden>
+                            <div class="inspector-token-header">
+                                <span class="token-icon">🔗</span>
+                                <span class="token-title">DETECTED TRANSACTION GUID</span>
+                            </div>
+                            <code id="inspector-token-value" class="inspector-token-value"></code>
+                            <div class="inspector-token-actions">
+                                <button type="button" id="inspector-track-flow-btn" class="text-button token-action-primary">🔗 Track Flow</button>
+                                <button type="button" id="inspector-copy-token-btn" class="text-button">📋 Copy GUID</button>
+                            </div>
+                        </div>
+
+                        <div class="inspector-actions-grid">
+                            <button type="button" id="inspector-copy-line-btn" class="text-button inspector-action-btn">📋 Copy Full Line</button>
+                            <button type="button" id="inspector-bookmark-btn" class="text-button inspector-action-btn">⭐ Add Bookmark</button>
+                        </div>
+                    </div>
+                </div>
             </section>
         </div>
     </div>
 </div>
+
+

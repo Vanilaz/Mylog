@@ -1,9 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
-
+  <ItemGroup>
+    <Compile Remove="MyLog.Tests\**" />
+    <Content Remove="MyLog.Tests\**" />
+    <EmbeddedResource Remove="MyLog.Tests\**" />
+    <None Remove="MyLog.Tests\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="MyLog.Tests" />
+  </ItemGroup>
 </Project>

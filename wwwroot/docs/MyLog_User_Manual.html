@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>คู่มือการใช้งานระบบ MyLog (User Manual) - Enterprise Console</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 15mm 15mm 18mm 15mm;
+            @bottom-right {
+                content: counter(page);
+                font-family: 'Leelawadee UI', 'Segoe UI', sans-serif;
+                font-size: 9pt;
+                color: #64748b;
+            }
+        }
+        * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+        body {
+            font-family: 'Leelawadee UI', 'Sarabun', 'Segoe UI', Tahoma, sans-serif;
+            font-size: 10pt;
+            line-height: 1.6;
+            color: #1e293b;
+            background: #f8fafc;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Sticky Reader Navigation Header */
+        .manual-top-nav {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            background: #0f172a;
+            color: #ffffff;
+            padding: 10px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .manual-nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+            font-size: 1.05rem;
+        }
+        .manual-badge {
+            background: #0284c7;
+            color: #ffffff;
+            font-size: 0.72rem;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        .manual-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .nav-btn {
+            background: #1e293b;
+            color: #f8fafc;
+            border: 1px solid #334155;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+        .nav-btn:hover {
+            background: #334155;
+            border-color: #475569;
+            color: #38bdf8;
+        }
+        .nav-btn.primary {
+            background: #0284c7;
+            border-color: #0369a1;
+            color: #ffffff;
+        }
+        .nav-btn.primary:hover {
+            background: #0369a1;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 24px auto 60px auto;
+            padding: 36px 44px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+            border: 1px solid #e2e8f0;
+        }
+        
+        /* Cover Section */
+        .cover-page {
+            border-bottom: 3px solid #0284c7;
+            padding: 20px 10px 40px 10px;
+            margin-bottom: 36px;
+        }
+        .cover-badge-top {
+            display: inline-block;
+            background: #0f172a;
+            color: #38bdf8;
+            font-weight: 700;
+            font-size: 9pt;
+            letter-spacing: 1.5px;
+            padding: 5px 12px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+        .cover-title {
+            font-size: 26pt;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.25;
+            margin: 0 0 12px 0;
+        }
+        .cover-subtitle {
+            font-size: 13pt;
+            color: #475569;
+            margin: 0 0 24px 0;
+            line-height: 1.5;
+        }
+        .cover-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-left: 5px solid #0284c7;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin-top: 18px;
+        }
+        .cover-meta-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px 20px;
+            font-size: 9.5pt;
+        }
+        .meta-label {
+            color: #64748b;
+            font-weight: 600;
+        }
+        .meta-value {
+            color: #0f172a;
+            font-weight: 700;
+        }
+
+        /* Typography & Layout */
+        h1, h2, h3, h4 {
+            color: #0f172a;
+            font-weight: 700;
+            page-break-after: avoid;
+        }
+        h1 {
+            font-size: 17pt;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+            color: #0369a1;
+            margin-top: 36px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        h2 {
+            font-size: 13pt;
+            color: #0f172a;
+            margin-top: 24px;
+            margin-bottom: 10px;
+        }
+        h3 {
+            font-size: 11pt;
+            color: #334155;
+            margin-top: 18px;
+            margin-bottom: 8px;
+        }
+        p {
+            margin: 0 0 12px 0;
+            text-align: justify;
+        }
+        ul, ol {
+            margin: 0 0 14px 0;
+            padding-left: 24px;
+        }
+        li {
+            margin-bottom: 6px;
+        }
+        code {
+            background: #f1f5f9;
+            color: #0f766e;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 9pt;
+            font-weight: 600;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0 20px 0;
+            font-size: 9.5pt;
+            page-break-inside: avoid;
+        }
+        th, td {
+            border: 1px solid #cbd5e1;
+            padding: 9px 12px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background: #f1f5f9;
+            color: #0f172a;
+            font-weight: 700;
+        }
+        tr:nth-child(even) td {
+            background: #f8fafc;
+        }
+
+        /* Callouts / Alerts */
+        .callout {
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin: 16px 0 20px 0;
+            font-size: 9.5pt;
+            page-break-inside: avoid;
+            border-left: 4px solid;
+        }
+        .callout-tip {
+            background: #f0f9ff;
+            border-color: #0284c7;
+            color: #0369a1;
+        }
+        .callout-warn {
+            background: #fffbeb;
+            border-color: #f59e0b;
+            color: #b45309;
+        }
+        .callout-success {
+            background: #f0fdf4;
+            border-color: #16a34a;
+            color: #15803d;
+        }
+        .callout-danger {
+            background: #fef2f2;
+            border-color: #dc2626;
+            color: #b91c1c;
+        }
+        .callout-title {
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+        }
+
+        /* Screenshot Figures */
+        .screenshot-figure {
+            margin: 20px 0 24px 0;
+            text-align: center;
+            page-break-inside: avoid;
+            background: #ffffff;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        }
+        .screenshot-img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 6px;
+            border: 1px solid #cbd5e1;
+            cursor: zoom-in;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .screenshot-img:hover {
+            box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+        }
+        .screenshot-caption {
+            margin-top: 10px;
+            font-size: 9pt;
+            color: #475569;
+            font-weight: 600;
+            line-height: 1.4;
+        }
+        .screenshot-caption strong {
+            color: #0f172a;
+        }
+
+        /* Step Bubbles */
+        .step-list {
+            list-style: none;
+            padding-left: 0;
+            counter-reset: step-counter;
+        }
+        .step-item {
+            position: relative;
+            padding-left: 42px;
+            margin-bottom: 16px;
+            counter-increment: step-counter;
+        }
+        .step-item::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 28px;
+            height: 28px;
+            background: #0284c7;
+            color: #ffffff;
+            font-weight: 700;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9pt;
+        }
+        .step-title {
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 4px;
+            font-size: 10.5pt;
+        }
+
+        /* Table of Contents */
+        .toc-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 18px 24px;
+            margin: 24px 0 32px 0;
+            page-break-after: always;
+        }
+        .toc-title {
+            font-size: 13pt;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #cbd5e1;
+            padding-bottom: 6px;
+        }
+        .toc-list {
+            list-style: none;
+            padding-left: 0;
+            margin: 0;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 20px;
+            font-size: 9.5pt;
+        }
+        .toc-list a {
+            color: #0369a1;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .toc-list a:hover {
+            text-decoration: underline;
+        }
+
+        /* Lightbox Modal */
+        #lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            cursor: zoom-out;
+            padding: 20px;
+        }
+        #lightbox img {
+            max-width: 95vw;
+            max-height: 92vh;
+            border-radius: 8px;
+            box-shadow: 0 12px 36px rgba(0,0,0,0.5);
+            border: 2px solid #38bdf8;
+        }
+
+        /* Print Media Styles */
+        @media print {
+            body {
+                background: #ffffff !important;
+                font-size: 9pt !important;
+            }
+            .manual-top-nav, #lightbox {
+                display: none !important;
+            }
+            .container {
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+                box-shadow: none !important;
+            }
+            .cover-page {
+                page-break-after: always;
+                height: 95vh;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                border-bottom: none;
+                margin-bottom: 0;
+                padding-bottom: 0;
+            }
+            .toc-box {
+                page-break-after: always;
+            }
+            .page-break {
+                page-break-after: always;
+            }
+            .screenshot-figure {
+                border: 1px solid #cbd5e1;
+                margin: 14px 0 16px 0;
+                padding: 6px;
+            }
+            .screenshot-img {
+                max-height: 240px;
+                width: auto;
+            }
+            h1 {
+                margin-top: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Online Navigation Bar -->
+    <header class="manual-top-nav">
+        <div class="manual-nav-brand">
+            <span style="font-size: 1.3rem;">📖</span>
+            <span>คู่มือการใช้งานระบบ MyLog (User Manual)</span>
+            <span class="manual-badge">Enterprise v2.4</span>
+        </div>
+        <div class="manual-actions">
+            <a href="MyLog_User_Manual.pdf" download="MyLog_User_Manual.pdf" class="nav-btn primary" title="ดาวน์โหลดคู่มือฉบับสมบูรณ์เป็นไฟล์ PDF">
+                <span>⬇ ดาวน์โหลด PDF</span>
+            </a>
+            <button type="button" onclick="window.print()" class="nav-btn" title="พิมพ์เอกสารออกทางเครื่องพิมพ์ หรือบันทึกเป็น PDF">
+                <span>🖨️ สั่งพิมพ์เอกสาร</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="container">
+
+        <!-- หน้าปก (Cover Page) -->
+        <section class="cover-page">
+            <div>
+                <div class="cover-badge-top">ENTERPRISE LOG MANAGEMENT & ANALYTICS</div>
+                <h1 class="cover-title">คู่มือการใช้งานระบบ MyLog</h1>
+                <div class="cover-subtitle">
+                    ระบบศูนย์กลางตรวจสอบ ค้นหา และวิเคราะห์ Log สำหรับระบบงานที่มีความสำคัญระดับวิกฤต (Mission-Critical Systems)<br>
+                    ครอบคลุมสภาพแวดล้อม Single Server, Remote API Gateway และ Multi-Node Cluster / Load Balancer
+                </div>
+
+                <div class="cover-card">
+                    <div class="cover-meta-grid">
+                        <div>
+                            <span class="meta-label">เวอร์ชันเอกสาร (Document Version):</span><br>
+                            <span class="meta-value">Version 2.4 (Enterprise Edition)</span>
+                        </div>
+                        <div>
+                            <span class="meta-label">วันที่ปรับปรุงล่าสุด (Last Updated):</span><br>
+                            <span class="meta-value">4 กันยายน 2026</span>
+                        </div>
+                        <div>
+                            <span class="meta-label">ระบบเป้าหมาย (Supported Environments):</span><br>
+                            <span class="meta-value">Single Server, Remote Gateway (SIT/UAT), Multi-Node Cluster</span>
+                        </div>
+                        <div>
+                            <span class="meta-label">ความปลอดภัยของระบบ (Network & Security):</span><br>
+                            <span class="meta-value">100% Intranet / Offline Ready (No Cloud/CDN Dependency)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="font-size: 8.5pt; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 40px;">
+                MyLog Enterprise Platform • เอกสารลับเฉพาะภายในองค์กร จัดทำขึ้นสำหรับทีมพัฒนาระบบ (Dev), ผู้ดูแลระบบ (Admin), ทีมสนับสนุนการผลิต (Production Support) และ Incident Management
+            </div>
+        </section>
+
+        <!-- สารบัญ (Table of Contents) -->
+        <section class="toc-box">
+            <div class="toc-title">สารบัญ (Table of Contents)</div>
+            <ul class="toc-list">
+                <li><a href="#sec-1">1. เริ่มต้นใช้งานและภาพรวมหน้าจอ (UI Anatomy)</a></li>
+                <li><a href="#sec-2">2. เจาะลึก 3 โหมดการทำงาน (Local / Remote / Cluster)</a></li>
+                <li><a href="#sec-3">3. การดู Log ในระบบ Cluster (Timeline vs Concat)</a></li>
+                <li><a href="#sec-4">4. การค้นหาข้อความในโฟลเดอร์ (Search in Folder & Grep)</a></li>
+                <li><a href="#sec-5">5. แถบตัวกรองด่วน 1-Click (Quick Filter Presets)</a></li>
+                <li><a href="#sec-6">6. จัดรูปแบบ JSON และเครื่องมือสืบสวนขั้นสูง</a></li>
+                <li><a href="#sec-7">7. แดชบอร์ดสรุปสถิติและกราฟ (Analytics Dashboard)</a></li>
+                <li><a href="#sec-8">8. การดาวน์โหลดไฟล์และโฟลเดอร์ (Downloads & ZIP)</a></li>
+                <li><a href="#sec-9">9. การใช้งานบนโทรศัพท์มือถือ (Mobile Field Console)</a></li>
+                <li><a href="#sec-10">10. ตัวอย่างสถานการณ์แก้ปัญหาจริง (Practical Scenarios)</a></li>
+                <li><a href="#sec-11">11. คำถามที่พบบ่อย (FAQ & Troubleshooting)</a></li>
+                <li><a href="#sec-12">12. สรุปปุ่มลัดและคำสั่งด่วน (Action Cheat Sheet)</a></li>
+            </ul>
+        </section>
+
+        <!-- บทที่ 1: ภาพรวมหน้าจอ -->
+        <section id="sec-1">
+            <h1>1. เริ่มต้นใช้งานและภาพรวมหน้าจอ (UI Anatomy)</h1>
+            <p>
+                ระบบ <strong>MyLog</strong> ได้รับการออกแบบให้ทำงานบนเว็บเบราว์เซอร์ผ่านเครือข่าย Intranet ภายในองค์กร 100% โดยไม่เชื่อมต่ออินเทอร์เน็ตภายนอก 
+                มีมาตรการความปลอดภัยสูงสุดด้วย <em>Path Traversal Protection</em> (ป้องกันการเจาะเข้าถึงไฟล์นอกเหนือจาก Whitelist ที่ได้รับอนุญาต) 
+                และ <em>Zero-RAM File Streaming</em> เพื่อป้องกันปัญหาหน่วยความจำเซิร์ฟเวอร์เต็มเมื่ออ่านไฟล์ขนาดใหญ่หลายร้อยเมกะไบต์
+            </p>
+
+            <figure class="screenshot-figure">
+                <img src="images/screen_01_main_browser.png" alt="โครงสร้างหน้าจอหลักของ MyLog" class="screenshot-img" onclick="openLightbox(this)">
+                <figcaption class="screenshot-caption">
+                    <strong>รูปที่ 1:</strong> หน้าจอหลักของ MyLog แบ่งออกเป็น Top Navigation Bar (ด้านบน), Left Sidebar (โหมดและโฟลเดอร์) และ File Browser (ตารางแสดงไฟล์)
+                </figcaption>
+            </figure>
+
+            <h3>องค์ประกอบสำคัญบนหน้าจอ:</h3>
+            <ul class="step-list">
+                <li class="step-item">
+                    <div class="step-title">แถบด้านบน (Top Navigation Bar)</div>
+                    แสดงชื่อระบบ MyLog, กล่องระบุเส้นทางปัจจุบัน (Location Breadcrumb), ปุ่มสลับธีม สว่าง/มืด (Dark/Light Mode), ปุ่มรีเฟรช และปุ่ม <strong>📖 คู่มือการใช้งาน</strong>
+                </li>
+                <li class="step-item">
+                    <div class="step-title">แถบควบคุมด้านซ้าย (Left Sidebar)</div>
+                    สวิตช์เลือกโหมดการทำงาน 3 รูปแบบ: <code>Local</code>, <code>Cluster / LB</code> และ <code>Remote</code> พร้อมแผนผังต้นไม้โฟลเดอร์ (Folder Tree)
+                </li>
+                <li class="step-item">
+                    <div class="step-title">พื้นที่ตารางจัดการไฟล์ (File Browser Panel)</div>
+                    แสดงรายการไฟล์ Log พร้อมข้อมูลขนาดไฟล์ วันที่แก้ไขล่าสุด และปุ่มคำสั่งด่วน: <code>Open</code> (เปิดอ่าน), <code>Tail</code> (สตรีมสด Real-time) และ <code>Download</code> (ดาวน์โหลด)
+                </li>
+                <li class="step-item">
+                    <div class="step-title">แถบเครื่องมือค้นหาและดาวน์โหลด (File Tools)</div>
+                    ประกอบด้วยช่องค้นหาชื่อไฟล์, ตัวกรอง <code>.log only</code>, ปุ่ม <strong>🔍 Search in folder</strong> (ค้นหาข้อความทั้งโฟลเดอร์) และปุ่ม <strong>⬇ Download ZIP</strong>
+                </li>
+            </ul>
+
+            <div class="callout callout-tip">
+                <div class="callout-title">💡 ทริคการปรับขนาดตัวอักษรและมุมมอง</div>
+                คุณสามารถปรับตัวอักษรให้อ่านง่ายขึ้นได้ที่ปุ่ม <strong>A-</strong> และ <strong>A+</strong> บนแถบเครื่องมือ รวมถึงสามารถสลับสวิตช์ <strong>Word wrap</strong> เมื่อต้องการดู Log แบบตัดบรรทัดพอดีหน้าจอ หรือดูแบบ Terminal แนวกว้าง
+            </div>
+        </section>
+
+        <!-- บทที่ 2: เจาะลึก 3 โหมดการทำงาน -->
+        <section id="sec-2">
+            <h1>2. เจาะลึก 3 โหมดการทำงาน (Local / Remote / Cluster)</h1>
+            <p>
+                MyLog มีสถาปัตยกรรมที่ยืดหยุ่น รองรับการเชื่อมต่อแหล่งที่มาของ Log ได้ 3 รูปแบบหลัก เพื่อตอบสนองการทำงานของทีมงานในทุกระดับ:
+            </p>
+
+            <figure class="screenshot-figure">
+                <img src="images/screen_02_cluster_browser.png" alt="หน้าต่าง File Browser ในโหมด Cluster" class="screenshot-img" onclick="openLightbox(this)">
+                <figcaption class="screenshot-caption">
+                    <strong>รูปที่ 2:</strong> หน้าจอในโหมด Cluster / Load Balancer แสดงสถานะสีเขียว (Online) ของ Node 1 และ Node 2 พร้อมปุ่มค้นหาและดาวน์โหลดรวม
+                </figcaption>
+            </figure>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">โหมดการทำงาน</th>
+                        <th style="width: 35%;">ลักษณะการทำงาน</th>
+                        <th style="width: 40%;">กรณีการใช้งานที่เหมาะสม</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>💻 Local Mode</strong></td>
+                        <td>อ่านไฟล์ Log บนเครื่องเซิร์ฟเวอร์ที่ติดตั้ง MyLog โดยตรง หรืออ่านผ่าน Windows Network Share (UNC Path เช่น <code>\192.168.1.10Logs</code>)</td>
+                        <td>ความเร็วในการโหลดสูงที่สุด เหมาะสำหรับเซิร์ฟเวอร์เดี่ยว (Single Server) หรือโฟลเดอร์แชร์ในวงแลนเดียวกัน</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🌐 Remote Mode (Gateway)</strong></td>
+                        <td>เชื่อมต่อไปยัง REST API Gateway ของสภาพแวดล้อม SIT หรือ UAT ดึงรายการโปรเจกต์และไฟล์ Log มาแสดงผลโดยไม่ต้องรีโมต</td>
+                        <td>ทีมผู้ใช้ที่ไม่ได้รับสิทธิ์ VPN ข้ามวงเครือข่าย หรือต้องการตรวจสอบ Log ของสภาพแวดล้อมทดสอบจากจุดเดียว</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🔀 Cluster / LB Mode</strong></td>
+                        <td>รวมศูนย์เครื่องแม่ข่ายหลายเครื่องที่ทำงานร่วมกันหลัง Load Balancer (เช่น Node 1: <code>192.168.1.10</code> และ Node 2: <code>192.168.1.11</code>)</td>
+                        <td>ระบบงานสำคัญระดับธนาคารที่มีการกระจายโหลดหรือทำ High Availability (HA) เพื่อสืบสวนปัญหาที่กระจายข้ามเครื่อง</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="callout callout-success">
+                <div class="callout-title">🛡️ กลไก Fault-Tolerant Probing ในระบบ Cluster</div>
+                หากโหนดใดโหนดหนึ่งใน Cluster ขัดข้อง ชัตดาวน์ หรือเน็ตเวิร์กหลุด (Offline) ระบบ MyLog จะตรวจจับภายใน 2 วินาที และจะทำงานต่อไปโดยนำ Log จากโหนดที่เหลืออยู่มาแสดงผลอย่างต่อเนื่อง <strong>หน้าจอจะไม่ค้างหรือ Error</strong> และเมื่อโหนดที่ดับกลับมาออนไลน์ สถานะจะเปลี่ยนเป็น Online สีเขียวให้อัตโนมัติ
+            </div>
+        </section>
+
+        <!-- บทที่ 3: การดู Log ในระบบ Cluster -->
+        <section id="sec-3">
+            <h1>3. การดู Log ในระบบ Cluster (Timeline vs Concat)</h1>
+            <p>
+                เมื่อเลือกเปิดไฟล์ Log ในโหมด Cluster ผู้ใช้จะสามารถเลือกรูปแบบการจัดเรียงข้อความ Log จากทุกโหนดได้ 2 รูปแบบหลัก ผ่านปุ่ม <strong>Pill Switcher</strong> ด้านบน:
+            </p>
+
+            <figure class="screenshot-figure">
+                <img src="images/screen_04_cluster_viewer_concat.png" alt="Log Viewer โหมด Concat แสดงการรวมโหนดต่อกัน" class="screenshot-img" onclick="openLightbox(this)">
+                <figcaption class="screenshot-caption">
+                    <strong>รูปที่ 3:</strong> โหมด <strong>All Nodes (ต่อกัน / Concat)</strong> แสดง Log ของ Node 1 จนจบ แล้วต่อด้วย Node 2 โดยมีเส้นคั่นชัดเจน พร้อมปุ่มดาวน์โหลดไฟล์รวม Concat .log
+                </figcaption>
+            </figure>
+
+            <figure class="screenshot-figure">
+                <img src="images/screen_05_cluster_viewer_timeline.png" alt="Log Viewer โหมด Timeline เรียงตามเวลาจริง" class="screenshot-img" onclick="openLightbox(this)">
+                <figcaption class="screenshot-caption">
+                    <strong>รูปที่ 4:</strong> โหมด <strong>All Nodes (Timeline)</strong> ผสานบรรทัด Log จากทุกเครื่องเข้าด้วยกัน เรียงลำดับเวลา (Timestamp) จากอดีตไปหาปัจจุบัน
+                </figcaption>
+            </figure>
+
+            <h3>เปรียบเทียบข้อดีของแต่ละมุมมอง:</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">มุมมอง (View Mode)</th>
+                        <th style="width: 40%;">การจัดเรียงเนื้อหา</th>
+                        <th style="width: 35%;">การใช้งานที่แนะนำ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>📑 All Nodes (ต่อกัน / Concat)</strong></td>
+                        <td>
+                            นำ Log ของ <strong>Node 1 ทั้งหมดตั้งแต่ต้นจนจบ</strong> แล้วตามด้วย Log ของ <strong>Node 2 ทั้งหมด</strong> มีเส้นคั่น <code>=== Node: [NodeName] ===</code> ระบุชัดเจน
+                        </td>
+                        <td>
+                            เหมาะสำหรับผู้ใช้ที่ต้องการอ่าน Log ทีละเครื่องแบบต่อเนื่อง ไม่ต้องการให้บรรทัดของแต่ละเครื่องสลับไปมาให้อ่านสับสน
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>🌐 All Nodes (Timeline)</strong></td>
+                        <td>
+                            ดึงบรรทัดจากทุกเครื่องมารวมกัน แล้วจัดเรียงตาม <strong>Timestamp</strong> เปรียบเสมือนเห็นภาพรวมของทั้งระบบพร้อมกันในวินาทีนั้น
+                        </td>
+                        <td>
+                            เหมาะสำหรับสืบสวนปัญหาการกระจายโหลด (Load Balancing) หรือการทำ Failover เมื่อต้องการดูว่าเครื่องไหนตอบสนองก่อนหรือหลัง
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>💻 เฉพาะเจาะจง Node</strong></td>
+                        <td>
+                            กรองแสดงผลเฉพาะ Log ของเครื่องแม่ข่ายเครื่องนั้นๆ เพียงเครื่องเดียว
+                        </td>
+                        <td>
+                            เมื่อทราบแน่ชัดแล้วว่า Root Cause เกิดขึ้นที่เครื่องใดเครื่องหนึ่งโดยเฉพาะ
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="callout callout-tip">
+                <div class="callout-title">🔒 3 การันตีความถูกต้องของโหมด Concat</div>
+                <ol style="margin-bottom: 0;">
+                    <li><strong>ลำดับ Node แน่นอน:</strong> เครื่อง Node 1 จะแสดงก่อน Node 2 เสมอตามการตั้งค่าคอนฟิก ไม่มีการสลับที่</li>
+                    <li><strong>เรียงจากบนลงล่าง:</strong> บรรทัด Log ภายในแต่ละเครื่องจะเรียงลำดับเวลาตามความเป็นจริง ไม่มีการกลับหัว</li>
+                    <li><strong>ป้องกันการกลืนข้อมูล (Fair-share Allocation):</strong> ระบบจะจัดสรรโควตาบรรทัดอย่างเป็นธรรม เครื่องที่มี Log มากจะไม่สามารถกลืนกินข้อมูลของเครื่องที่มี Log น้อยจนมองไม่เห็นได้</li>
+                </ol>
+            </div>
+        </section>
+
+        <!-- บทที่ 4: การค้นหาในโฟลเดอร์ -->
+        <section id="sec-4">
+            <h1>4. การค้นหาข้อความในโฟลเดอร์ (Search in Folder & Grep)</h1>
+            <p>
+                ในระบบที่มี Log ขนาดใหญ่หรือมีไฟล์ย้อนหลังหลายวัน ผู้ใช้ไม่จำเป็นต้องเปิดหาทีละไฟล์อีกต่อไป! ฟังก์ชัน <strong>🔍 Search in folder</strong> จะทำการสแกนหาข้อความที่ต้องการจากทุกไฟล์ในโฟลเดอร์ปัจจุบันทันที (และในโหมด Cluster จะสแกนข้ามทุกโหนดพร้อมกัน):
+            </p>
+
+            <figure class="screenshot-figure">
+                <img src="images/screen_03_folder_search_bar.png" alt="แถบค้นหาในโฟลเดอร์พร้อมผลการค้นหาข้าม Cluster" class="screenshot-img" onclick="openLightbox(this)">
+                <figcaption class="screenshot-caption">
+                    <strong>รูปที่ 5:</strong> แถบค้นหาข้อความในโฟลเดอร์ แสดงจำนวนที่พบ และรายการผลลัพธ์แยกตามชื่อไฟล์และโหนด (Node 1 / Node 2)
+                </figcaption>
+            </figure>
+
+            <h3>ขั้นตอนการค้นหาในโฟลเดอร์:</h3>
+            <ol class="step-list">
+                <li class="step-item">
+                    <div class="step-title">กดปุ่ม 🔍 Search in folder</div>
+                    ปุ่มนี้อยู่มุมบนขวาของตารางไฟล์ (สามารถกดซ้ำเพื่อเปิด/ปิดแถบค้นหาได้)
+                </li>
+                <li class="step-item">
+                    <div class="step-title">พิมพ์ข้อความที่ต้องการค้นหา</div>
+                    เช่น Transaction ID, Request GUID, หมายเลขบัญชี, เลขสัญญาสินเชื่อ, หรือข้อความ Exception เช่น <code>TimeoutException</code>
+                </li>
+                <li class="step-item">
+                    <div class="step-title">เลือกตัวเลือก Regex (หากต้องการ)</div>
+                    หากต้องการใช้นิพจน์ปกติขั้นสูง เช่น ค้นหารูปแบบบัตรประชาชนหรือไอพีแอดเดรส สามารถติ๊กถูกที่ช่อง <code>Regex</code> ได้
+                </li>
+                <li class="step-item">
+                    <div class="step-title">คลิกที่ผลลัพธ์เพื่อไปยังบรรทัดนั้นทันที</div>
+                    เมื่อระบบแสดงรายการบรรทัดที่พบ สามารถคลิกที่รายการนั้นเพื่อเปิดไฟล์ดังกล่าวและเลื่อนหน้าจอไปยังตำแหน่งบรรทัดนั้นพร้อมเน้นสีไฮไลต์ให้อัตโนมัติ
+                </li>
+            </ol>
+        </section>
+
+        <!-- บทที่ 5: ตัวกรองด่วน -->
+        <section id="sec-5">
+            <h1>5. แถบตัวกรองด่วน 1-Click (Quick Filter Presets)</h1>
+            <p>
+                ในขณะที่เปิดอ่านไฟล์ Log ระบบมีแถบตัวกรองด่วนแบบสำเร็จรูป (Quick Filters) ช่วยให้ตัดข้อความที่ไม่เกี่ยวข้องออก และเหลือเฉพาะสิ่งที่น่าสงสัยได้ในคลิกเดียว:
+            </p>
+
+            <figure class="screenshot-figure">
+                <img src="images/screen_08_quick_filters.png" alt="แถบเครื่องมือค้นหาและตัวกรองด่วน" class="screenshot-img" onclick="openLightbox(this)">
+                <figcaption class="screenshot-caption">
+                    <strong>รูปที่ 6:</strong> แถบ Search file content พร้อม Dropdown ตัวกรองด่วน (Quick Filters: Errors, Warnings, HTTP 4xx/5xx, Slow Requests, Timeouts)
+                </figcaption>
+            </figure>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">ตัวกรอง (Preset)</th>
+                        <th style="width: 40%;">สิ่งที่ระบบคัดกรอง</th>
+                        <th style="width: 35%;">ประโยชน์สำหรับผู้ใช้</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>💥 Errors & Exceptions</strong></td>
+                        <td>กรองเฉพาะข้อผิดพลาดระดับ Error หรือ Exception จริงๆ <em>(ฉลาดพอที่จะตัด JSON ที่มี <code>"error": null</code> ในระดับ INFO ทิ้ง)</em></td>
+                        <td>หาจุดล้มเหลวของโปรแกรมได้ทันทีโดยไม่ต้องไล่ดูทีละบรรทัด</td>
+                    </tr>
+                    <tr>
+                        <td><strong>⚠️ Warnings</strong></td>
+                        <td>กรองเฉพาะบรรทัดที่มีข้อความเตือน <code>WARN</code> หรือ <code>Warning</code></td>
+                        <td>ตรวจสอบสัญญาณเตือนก่อนที่ระบบจะเกิดเหตุการณ์วิกฤต</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🌐 HTTP 4xx / 5xx</strong></td>
+                        <td>กรองเฉพาะบรรทัดที่มีรหัสสถานะ HTTP ผิดพลาด เช่น 400, 401, 404, 500, 502, 503, 504</td>
+                        <td>สืบสวนปัญหาการเชื่อมต่อระหว่าง Microservices หรือ API Gateway</td>
+                    </tr>
+                    <tr>
+                        <td><strong>⏱️ Slow Requests (>1s)</strong></td>
+                        <td>ตรวจจับและคัดกรองคำขอที่ใช้เวลาประมวลผลนานกว่า 1,000 มิลลิวินาที (1 วินาทีขึ้นไป)</td>
+                        <td>ระบุจุดคอขวด (Performance Bottlenecks) ของระบบ</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🆔 Trace ID / GUID</strong></td>
+                        <td>กรองหาบรรทัดที่มีค่า Correlation ID, RequestId หรือ GUID รูปแบบมาตรฐาน</td>
+                        <td>ใช้ติดตามธุรกรรมของลูกค้ารายบุคคลข้ามระบบงาน</td>
+                    </tr>
+                    <tr>
+                        <td><strong>🔌 Timeouts & Sockets</strong></td>
+                        <td>กรองเฉพาะปัญหา Connection Timeout, Socket Closed, หรือ Connection Refused</td>
+                        <td>ตรวจหาสาเหตุเซิร์ฟเวอร์ปลายทางล่มหรือปัญหาทางเน็ตเวิร์ก</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- บทที่ 6: เครื่องมือวิเคราะห์ขั้นสูง -->
+        <section id="sec-6">
+            <h1>6. จัดรูปแบบ JSON และเครื่องมือสืบสวนขั้นสูง</h1>
+            <p>
+                ไฟล์ Log ยุคใหม่มักมีขนาดก้อน JSON Payload ที่ยาวมากและพิมพ์ต่อกันเป็นบรรทัดเดียว ทำให้อ่านยากอย่างยิ่ง MyLog จึงเตรียมเครื่องมือช่วยวิเคราะห์ขั้นสูงไว้รองรับ:
+            </p>
+
+            <figure class="screenshot-figure">
+                <img src="images/screen_06_json_formatting.png" alt="การจัดรูปแบบ JSON อัตโนมัติ" class="screenshot-img" onclick="openLightbox(this)">
+                <figcaption class="screenshot-caption">
+                    <strong>รูปที่ 7:</strong> โหมด <strong>Auto Format JSON</strong> จะแยกโครงสร้าง Key/Value พร้อมใส่สีและย่อหน้าให้อ่านง่าย และสามารถคลิกยุบ/ขยายได้
+                </figcaption>
+            </figure>
+
+            <h3>6.1 ระบบจัดรูปแบบ JSON (Auto Format JSON & Expand Toggle)</h3>
+            <ul>
+                <li><strong>ช่องติ๊ก <code>Auto-Format JSON</code>:</strong> เมื่อติ๊กใช้งาน ระบบจะค้นหาก้อน JSON ในข้อความ Log แล้วจัดย่อหน้า (Indentation) ขึ้นบรรทัดใหม่อย่างสวยงามโดยอัตโนมัติ</li>
+                <li><strong>คลิกย่อ-ขยายเฉพาะจุด:</strong> บนแต่ละก้อน JSON จะมีปุ่มสำหรับคลิกพับเก็บ (Collapse) หรือกางออก (Expand) ได้อย่างอิสระ</li>
+            </ul>
+
+            <h3>6.2 Request Flow Tracker (สืบเส้นทาง GUID อัตโนมัติ)</h3>
+            <p>
+                ระบบมี AI Tokenizer ทำการตรวจจับรหัส GUID, CorrelationId, และ RequestUid ในทุกบรรทัด Log แล้วแปลงเป็น <strong>Clickable Chip</strong>:
+            </p>
+            <ul>
+                <li>เมื่อคลิกที่ชิปรหัสใดๆ หน้าจอจะเข้าสู่โหมด <em>Flow Tracker</em> ทันที</li>
+                <li>ระบบจะคัดกรองเฉพาะบรรทัดที่เกี่ยวข้องกับคำขอนั้นตั้งแต่เริ่มเข้าสู่ระบบจนเสร็จสิ้นกระบวนการ</li>
+                <li>มีปุ่ม <strong>Copy Flow Summary</strong> เพื่อคัดลอกขั้นตอนทั้งหมดไปสรุปส่งทีมงานได้ในคลิกเดียว</li>
+            </ul>
+
+            <h3>6.3 ระบบปักหมุดและส่งออกเหตุการณ์ (Bookmarks & Incident Summary)</h3>
+            <ul>
+                <li>คลิกที่ไอคอนรูปดาว <code>☆</code> หน้าเลขบรรทัดเพื่อปักหมุดบรรทัดสำคัญ</li>
+                <li>คลิกเปิด <strong>Bookmarks (⭐)</strong> เพื่อดูสรุปรายการที่ปักหมุดไว้ทั้งหมด</li>
+                <li>กดปุ่ม <strong>Export Summary</strong> เพื่อสร้างข้อความรายงานสรุปเหตุการณ์พร้อมนำไปวางใน Microsoft Teams หรือเปิด JIRA Ticket ได้ทันที</li>
+            </ul>
+        </section>
+
+        <!-- บทที่ 7: กราฟสถิติและแดชบอร์ด -->
+        <section id="sec-7">
+            <h1>7. แดชบอร์ดสรุปสถิติและกราฟ (Analytics Dashboard)</h1>
+            <p>
+                ผู้ใช้สามารถกดปุ่ม <strong>📊 Analytics</strong> บนแถบเครื่องมือเพื่อเปิดหน้าต่างวิเคราะห์เชิงลึกของไฟล์ Log ที่กำลังเปิดอยู่:
+            </p>
+
+            <figure class="screenshot-figure">
+                <img src="images/screen_07_analytics_dashboard.png" alt="แดชบอร์ดสถิติ Log Analytics" class="screenshot-img" onclick="openLightbox(this)">
+                <figcaption class="screenshot-caption">
+                    <strong>รูปที่ 8:</strong> แดชบอร์ด Analytics แสดงการ์ดสรุปยอด KPI, กราฟแท่งการกระจายตัวของ Error รายชั่วโมง และรายการ Top Error Patterns
+                </figcaption>
+            </figure>
+
+            <h3>ประโยชน์ของแดชบอร์ด:</h3>
+            <ul>
+                <li><strong>การ์ดสรุป KPI:</strong> ทราบจำนวนรวมของ Errors, Warnings, Info logs และจำนวนบรรทัดทั้งหมดที่สแกน</li>
+                <li><strong>กราฟการกระจายตัวรายชั่วโมง (Hourly Histogram):</strong> มองเห็นได้อย่างชัดเจนว่าระบบเริ่มเกิดปัญหาที่ชั่วโมงใด โดยสามารถคลิกที่แท่งกราฟชั่วโมงนั้นเพื่อกรองดู Log เฉพาะช่วงเวลาดังกล่าวได้ทันที</li>
+                <li><strong>Top Error Patterns:</strong> สรุปข้อความ Error ที่เกิดขึ้นซ้ำบ่อยที่สุด พร้อมจำนวนครั้งที่พบ เมื่อคลิกที่รายการ ระบบจะทำการค้นหาข้อความ Error นั้นในหน้าจอ Log ให้อัตโนมัติ</li>
+            </ul>
+        </section>
+
+        <!-- บทที่ 8: การดาวน์โหลดไฟล์และโฟลเดอร์ -->
+        <section id="sec-8">
+            <h1>8. การดาวน์โหลดไฟล์และโฟลเดอร์ (Downloads & ZIP)</h1>
+            <p>
+                MyLog มีฟังก์ชันสำเนาและส่งออก Log ออกมาวิเคราะห์ต่อนอกระบบได้อย่างสะดวก รวดเร็ว และประหยัดหน่วยความจำ:
+            </p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 25%;">รูปแบบการดาวน์โหลด</th>
+                        <th style="width: 35%;">ตำแหน่งปุ่มคำสั่ง</th>
+                        <th style="width: 40%;">ผลลัพธ์ที่ได้</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>ดาวน์โหลดไฟล์เดี่ยว</strong></td>
+                        <td>ปุ่ม <code>Download</code> ในตารางไฟล์ หรือปุ่ม <code>Download File</code> ในแถบ Viewer</td>
+                        <td>ดาวน์โหลดไฟล์ Log นั้นในรูปแบบ <code>.log</code> หรือ <code>.txt</code> แบบต้นฉบับดั้งเดิม</td>
+                    </tr>
+                    <tr>
+                        <td><strong>ดาวน์โหลดทั้งโฟลเดอร์ (ZIP)</strong></td>
+                        <td>ปุ่ม <strong>⬇ Download ZIP</strong> มุมบนขวาของตารางไฟล์</td>
+                        <td>
+                            ระบบจะบีบอัดไฟล์ Log ทั้งหมดในโฟลเดอร์เป็นไฟล์ ZIP เดียว <em>(หากอยู่ในโหมด Cluster ระบบจะดึงไฟล์จากทุก Node มารวมแยกโฟลเดอร์ให้เป็นระเบียบ)</em>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>ดาวน์โหลดไฟล์รวม Concat (.log)</strong></td>
+                        <td>ปุ่ม <strong>📑 Cluster .log</strong> ในแถบควบคุมของ Cluster Viewer</td>
+                        <td>
+                            รวม Log ของทุกโหนดต่อกันเป็นไฟล์ <code>.log</code> เดียว นำไปเปิดดูใน Text Editor ภายนอกได้ทันที
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- บทที่ 9: การใช้งานบนมือถือ -->
+        <section id="sec-9">
+            <h1>9. การใช้งานบนโทรศัพท์มือถือ (Mobile Field Console)</h1>
+            <p>
+                สำหรับทีมงาน On-call หรือ Support ที่จำเป็นต้องตรวจสอบระบบนอกสถานที่ MyLog มีหน้าจอมือถือ (Field Console UX) ที่ออกแบบมาเพื่อการใช้งานด้วยนิ้วโป้งมือเดียวโดยเฉพาะ:
+            </p>
+
+            <figure class="screenshot-figure" style="max-width: 420px; margin-left: auto; margin-right: auto;">
+                <img src="images/screen_09_mobile_field_console.png" alt="หน้าจอมือถือ Field Console บนสมาร์ทโฟน" class="screenshot-img" onclick="openLightbox(this)">
+                <figcaption class="screenshot-caption">
+                    <strong>รูปที่ 9:</strong> หน้าจอมือถือพร้อมแถบสถิติด้านบน (Mobile Ribbon) และแถบคำสั่งลอยด้านล่าง (Bottom Command Bar) ในระยะนิ้วโป้ง
+                </figcaption>
+            </figure>
+
+            <h3>ฟังก์ชันเด่นบนอุปกรณ์มือถือ:</h3>
+            <ul>
+                <li><strong>Bottom Command Bar:</strong> ปุ่มคำสั่งสำคัญย้ายมาอยู่ชิดขอบล่างหน้าจอ ได้แก่ ปุ่ม <code>🚨 Errors Only</code> (กรองเฉพาะข้อผิดพลาด), <code>🔍 Search</code> (ค้นหา), <code>↩️ Wrap</code> (สลับการตัดบรรทัด) และ <code>⭐ Bookmarks</code> (ปักหมุด)</li>
+                <li><strong>Mobile Stats Ribbon:</strong> แถบสรุปสถานะการเชื่อมต่อ และจำนวน Error/Warning แสดงเด่นชัดที่ส่วนบนของหน้าจอ</li>
+                <li><strong>Tap-to-Inspect Bottom Sheet:</strong> แตะที่บรรทัด Log เพื่อเปิดการ์ดแสดงรายละเอียดเชิงลึก พร้อมปุ่มคัดลอก GUID สะดวกสบาย</li>
+            </ul>
+        </section>
+
+        <!-- บทที่ 10: ตัวอย่างสถานการณ์จริง -->
+        <section id="sec-10">
+            <h1>10. ตัวอย่างสถานการณ์แก้ปัญหาจริง (Practical Scenarios)</h1>
+
+            <h3>สถานการณ์ที่ 1: ตรวจสอบปัญหา Timeout ในระบบหลัง Load Balancer</h3>
+            <ol class="step-list">
+                <li class="step-item">
+                    <div class="step-title">เลือกโหมด Cluster / LB</div>
+                    คลิกแถบ <code>Cluster / LB</code> ใน Sidebar ด้านซ้าย และเลือกคลัสเตอร์ที่ต้องการตรวจสอบ
+                </li>
+                <li class="step-item">
+                    <div class="step-title">เปิดไฟล์ Log ของวันนี้</div>
+                    คลิกปุ่ม <code>Open</code> ที่ไฟล์ Log ประจำวัน ระบบจะโหลดหน้าต่างแบบรวมโหนด
+                </li>
+                <li class="step-item">
+                    <div class="step-title">คลิกเลือกมุมมอง Concat หรือ Timeline</div>
+                    คลิกที่ <strong>📑 All Nodes (ต่อกัน / Concat)</strong> เพื่อดูว่า Timeout เกิดที่ Node 1 หรือ Node 2
+                </li>
+                <li class="step-item">
+                    <div class="step-title">เลือกตัวกรองด่วน <code>Timeouts & Sockets</code></div>
+                    ระบบจะกรองตัดบรรทัดปกติออก เหลือเฉพาะบรรทัดที่เกิด Timeout ชี้เป้าปัญหาได้ภายใน 5 วินาที
+                </li>
+            </ol>
+
+            <h3>สถานการณ์ที่ 2: ลูกค้าแจ้งเลขอ้างอิง Transaction ID แต่ไม่ทราบว่าคำขอวิ่งไปเครื่องไหน</h3>
+            <ol class="step-list">
+                <li class="step-item">
+                    <div class="step-title">เปิดหน้าจอ File Browser ของคลัสเตอร์นั้น</div>
+                    ไม่ต้องคลิกเปิดทีละไฟล์
+                </li>
+                <li class="step-item">
+                    <div class="step-title">คลิกปุ่ม 🔍 Search in folder</div>
+                    พิมพ์รหัส Transaction ID ลงในช่องค้นหา แล้วกด Enter หรือคลิก Search Folder
+                </li>
+                <li class="step-item">
+                    <div class="step-title">ดูผลลัพธ์ที่พบ</div>
+                    ระบบจะแสดงป้ายกำกับทันทีว่าพบ Transaction ID นี้ในไฟล์ใด และเกิดขึ้นที่ <strong>Node 1</strong> หรือ <strong>Node 2</strong> พร้อมเลขบรรทัด
+                </li>
+                <li class="step-item">
+                    <div class="step-title">คลิกผลลัพธ์เพื่อกระโดดไปยังบรรทัดนั้น</div>
+                    ระบบจะเปิดไฟล์และเลื่อนไปยังบรรทัดที่พบพร้อมไฮไลต์สีให้อัตโนมัติ
+                </li>
+            </ol>
+        </section>
+
+        <!-- บทที่ 11: คำถามที่พบบ่อย -->
+        <section id="sec-11">
+            <h1>11. คำถามที่พบบ่อยและแนวทางแก้ไข (FAQ)</h1>
+
+            <div class="callout callout-tip">
+                <div class="callout-title">Q: ทำไมโหมด Cluster บางครั้งขึ้นสถานะ Offline ของบางโหนด?</div>
+                <strong>A:</strong> ระบบ MyLog มีการทดสอบการเชื่อมต่อไปยังแต่ละโหนดด้วย Timeout สั้น (2-5 วินาที) หากเครื่องแม่ข่ายปลายทางกำลังรีสตาร์ต ปิดปรับปรุง หรือเครือข่ายขัดข้อง โหนดนั้นจะขึ้น Offline ชั่วคราว แต่โหนดอื่นๆ จะยังคงเปิดดู Log ได้ตามปกติ และเมื่อเครื่องดังกล่าวกลับมาออนไลน์ สถานะจะกลับเป็นปกติโดยอัตโนมัติ
+            </div>
+
+            <div class="callout callout-tip">
+                <div class="callout-title">Q: ฟังก์ชัน Folder Search ค้นหาได้ลึกและเร็วแค่ไหน?</div>
+                <strong>A:</strong> ระบบจะทำการสแกนไฟล์ <code>.log</code> และ <code>.txt</code> ในโฟลเดอร์ปัจจุบันสูงสุด 20 ไฟล์ล่าสุดของแต่ละโหนด โดยอ่านข้อความแบบสตรีมมิงความเร็วสูง จึงไม่ทำให้เซิร์ฟเวอร์หน่วงและตอบสนองได้ภายในไม่กี่วินาที
+            </div>
+
+            <div class="callout callout-tip">
+                <div class="callout-title">Q: ทำไมเปิดดูไฟล์ Log ขนาดหลายร้อยเมกะไบต์แล้วเบราว์เซอร์ไม่ค้าง?</div>
+                <strong>A:</strong> MyLog ใช้เทคโนโลยี Virtual DOM Rendering โดยจะเรนเดอร์เฉพาะบรรทัดที่ปรากฏอยู่ในขอบเขตสายตาของผู้ใช้เท่านั้น ทำให้เบราว์เซอร์ไม่ต้องแบกรับ DOM Element นับล้านชิ้น และใช้งานหน่วยความจำอย่างประหยัด
+            </div>
+
+            <div class="callout callout-tip">
+                <div class="callout-title">Q: ต้องการพิมพ์คู่มือฉบับนี้เก็บไว้ทำอย่างไร?</div>
+                <strong>A:</strong> สามารถกดปุ่ม <strong>⬇ ดาวน์โหลด PDF</strong> ที่แถบนำทางด้านบนเพื่อรับไฟล์ PDF สำเร็จรูป หรือกดปุ่ม <strong>🖨️ สั่งพิมพ์เอกสาร</strong> เพื่อสั่ง Print ออกเครื่องพิมพ์ของท่านได้ทันที
+            </div>
+        </section>
+
+        <!-- บทที่ 12: สรุปคีย์ลัด -->
+        <section id="sec-12">
+            <h1>12. สรุปปุ่มลัดและคำสั่งด่วน (Action Cheat Sheet)</h1>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">ปุ่ม / ฟังก์ชัน</th>
+                        <th style="width: 30%;">ตำแหน่งบนหน้าจอ</th>
+                        <th style="width: 40%;">การทำงาน</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>🔍 Search in folder</code></td>
+                        <td>มุมขวาบนของตารางไฟล์</td>
+                        <td>ค้นหาข้อความจากทุกไฟล์ในโฟลเดอร์ (รวมถึงข้ามทุก Node ใน Cluster)</td>
+                    </tr>
+                    <tr>
+                        <td><code>⬇ Download ZIP</code></td>
+                        <td>มุมขวาบนของตารางไฟล์</td>
+                        <td>บีบอัดไฟล์ทั้งโฟลเดอร์เป็น ZIP ก้อนเดียว</td>
+                    </tr>
+                    <tr>
+                        <td><code>📑 All Nodes (Concat)</code></td>
+                        <td>Pill Switcher ใน Cluster Viewer</td>
+                        <td>สลับการดู Log รวมแบบต่อกัน Node 1 จบแล้วตามด้วย Node 2</td>
+                    </tr>
+                    <tr>
+                        <td><code>🌐 All Nodes (Timeline)</code></td>
+                        <td>Pill Switcher ใน Cluster Viewer</td>
+                        <td>สลับการดู Log รวมตามเวลาจริง (Chronological Timestamp)</td>
+                    </tr>
+                    <tr>
+                        <td><code>Auto-Format JSON</code></td>
+                        <td>Checkbox ใน View Options</td>
+                        <td>จัดระเบียบโครงสร้าง JSON ในบรรทัดให้อ่านง่ายและคลิกย่อ/ขยายได้</td>
+                    </tr>
+                    <tr>
+                        <td><code>📊 Analytics</code></td>
+                        <td>แถบเครื่องมือด้านบน Viewer</td>
+                        <td>เปิดแดชบอร์ดสถิติและกราฟวิเคราะห์ข้อผิดพลาดรายชั่วโมง</td>
+                    </tr>
+                    <tr>
+                        <td><code>⭐ Bookmarks</code></td>
+                        <td>แถบเครื่องมือด้านบน Viewer</td>
+                        <td>เปิดดูบรรทัดที่ปักหมุดไว้ และกด Export Summary ส่งต่อได้ทันที</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+    </div>
+
+    <!-- Lightbox Modal for Full Image Zoom -->
+    <div id="lightbox" onclick="closeLightbox()">
+        <img id="lightbox-img" src="" alt="Enlarged screenshot">
+    </div>
+
+    <script>
+        function openLightbox(img) {
+            const lb = document.getElementById('lightbox');
+            const lbImg = document.getElementById('lightbox-img');
+            lbImg.src = img.src;
+            lb.style.display = 'flex';
+        }
+        function closeLightbox() {
+            document.getElementById('lightbox').style.display = 'none';
+        }
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeLightbox();
+        });
+    </script>
+</body>
+</html>

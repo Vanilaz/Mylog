@@ -1,93 +1,117 @@
-# A0454_MyLog
+# MyLog - Enterprise Log Viewer & Analytics Console
 
+**MyLog** is a lightweight, high-performance, and offline-ready log viewer and analytics platform built on ASP.NET Core 8. It is engineered specifically for banking and enterprise systems (SIT, UAT, and Production) to monitor, inspect, search, and analyze application logs without installing heavy agents or relying on external cloud/CDN dependencies.
 
+📖 **[อ่านคู่มือการใช้งานระบบภาษาไทย (User Manual)](./USER_MANUAL.md)**
 
-## Getting started
+---
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+## 🌟 Key Features
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+### 1. 📊 Log Analytics & Dashboard
+- **Instant KPI Metrics:** Error/Critical, Warning, Info, and Total Lines Scanned counts.
+- **Hourly Distribution Histogram:** High-DPI Canvas-based dual-color bar chart comparing error vs. warning frequencies over time to spot error spikes immediately.
+- **Top 5 Error Patterns:** Automatic extraction and clustering of the most frequent exception types and error messages.
+- **Interactive Filtering:** Click any KPI card, chart bar, or error badge to instantly filter the log viewer to matching lines.
 
-## Add your files
+### 2. ⚡ Pre-built Quick Filters
+- Instant dropdown presets for rapid troubleshooting without typing regular expressions manually:
+  - 💥 **Errors & Exceptions Only:** Precise severity filtering (excludes JSON fields like `'error':null` in INFO logs).
+  - ⚠️ **Warnings:** Isolates warning lines.
+  - 🌐 **HTTP 4xx / 5xx:** Detects HTTP client/server status failure codes.
+  - ⏱️ **Slow Requests (>1s):** Detects operations taking >1,000ms.
+  - 🆔 **Trace ID / GUID:** Standard UUID/GUID pattern matching.
+  - 🔌 **Timeouts & Sockets:** Captures timeout and network connection failures.
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+### 3. 🔍 Folder-Level Search (Grep in Folder)
+- Search keywords, Transaction IDs, or Trace IDs across **all log files** in the current directory concurrently.
+- Accessible directly from the Log Viewer (`📁 In Folder` button) and the File Browser (`🔍 Search in folder`).
+- Click any search result to open that file and jump directly to the matched line (`#L{lineNumber}`).
 
+### 4. ⏱️ Time-Range Filter
+- Filter log output within a precise time window by specifying `Start Time` and `End Time` (e.g. `02:00:00` to `02:45:00`).
+- Seamlessly isolates incidents while preserving stack trace context.
+
+### 5. ⚡ Live Tailing & Advanced Viewer
+- **Real-time Streaming:** Low-overhead live log tailing powered by ASP.NET Core SignalR.
+- **Context Lines:** View matching lines with `±1`, `±2`, `±3`, `±5`, or `±10` surrounding context lines.
+- **JSON Formatting:** Auto-formats inline JSON payloads for readability.
+- **Quick Copy & Bookmarks:** Click any line number to copy the line directly to clipboard with instant confirmation.
+- **Custom Highlighting:** Comma-separated keyword highlighter with distinct colors.
+
+### 6. 🌐 Remote Log Gateway Integration
+- Browse and read remote logs from SIT/UAT server gateways securely via configured API endpoints.
+
+### 7. 🚀 High-Speed Downloads & ZIP Packaging
+- High-throughput streaming in 1MB chunks bypassing Kestrel's 64KB buffer limit.
+- Download entire directories as uncompressed ZIP archives on-the-fly with `FileShare.ReadWrite` support.
+
+### 8. 🔗 One-Click Request Flow Tracker
+- Automatically detects `RequestUid`, `CorrelationId`, and GUIDs in log output and transforms them into interactive clickable chips.
+- Click any chip to isolate all steps of that transaction across the file with a floating flow banner and 1-click clipboard export.
+
+### 9. ⭐ Log Bookmarks & Pinned Lines
+- Pin critical log lines with a single click (`☆`/`⭐`).
+- Slide-out Bookmarks Drawer displaying pinned lines, timestamps, and severity levels.
+- 1-click jump to any bookmarked line, and 1-click formatted incident summary export for JIRA/Teams.
+
+### 10. 📱 Mobile-First UX Field Console
+- **Sticky Bottom Command Bar:** Ergonomically placed in the mobile Thumb Zone for effortless one-handed triage. Includes 1-tap **`🚨 Errors Only`** filter, **`↩️ Word Wrap`** toggle, **`🔍 Quick Search`**, **`⭐ Bookmarks`** badge, **`📊 Analytics`**, and **`⬇️ Live Scroll`**.
+- **Tap-to-Inspect Bottom Sheet:** Tapping any log line on mobile opens an inspection drawer with timestamp, severity badge, detected GUIDs, and 1-tap buttons for **`🔗 Track Flow`**, **`📋 Copy GUID`**, and **`⭐ Bookmark`**.
+- **Landscape Pro Terminal Mode & Word Wrap:** Automatically adapts to landscape orientation with edge-to-edge rendering, floating translucent action capsule, and 1-tap **`↩️`** Word Wrap toggle to switch between fully wrapped readable lines and single-line terminal view with smooth horizontal scrolling.
+- **Severity Accent Left Stripes:** Distinct colored edge stripes on all log lines (Red = Error, Amber = Warn, Blue = Info) for instantaneous visual incident scanning.
+
+### 11. 🌐 Enterprise Cluster & Load Balancer Log Aggregation
+- **Unified Chronological Timeline:** Merges and interleaves log streams from multiple servers behind a Load Balancer in parallel (`Task.WhenAll`), sorted precisely by timestamp.
+- **Node Switcher Tabs:** Seamlessly toggle between `[🌐 All Nodes (Merged Timeline)]` or focus on individual nodes (`[💻 Node 1]`, `[💻 Node 2]`) in 1 click.
+- **Node Identity Badges:** Color-coded inline tags (`[App Server A]`, `[App Server B]`) indicate which server instance handled each step.
+- **Cross-Cluster Scatter-Gather Search:** Query Trace IDs across all nodes in the cluster simultaneously.
+- **Zero-RAM Temporary File ZIP Downloads:** Bundles logs from all cluster machines into a structured ZIP without Large Object Heap memory spikes.
+- **Node Reachability Probing:** Auto-probes node health with a 2-second timeout and live status indicators.
+
+---
+
+## ⚙️ Configuration (`appsettings.json`)
+
+```json
+{
+  "AllowedFolders": [
+    "D:\\WSProjectLogs\\SIT",
+    "C:\\Logs"
+  ],
+  "DownloadLimits": {
+    "MaxZipSizeMB": 100,
+    "MaxExtractedSizeMB": 300
+  },
+  "RemoteLogApi": {
+    "BaseUrl": "https://gateway-url/",
+    "ApiKey": "",
+    "TimeoutSeconds": 15
+  }
+}
 ```
-cd existing_repo
-git remote add origin https://github.com/Vanilaz/Mylog.git
-git branch -M main
-git push -uf origin main
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) or higher.
+
+### Run Locally
+```bash
+dotnet restore
+dotnet run
+```
+Open your browser at `http://localhost:5000` (or the configured port).
+
+### Build for Production / UAT
+```bash
+dotnet publish -c Release -o ./publish
 ```
 
-## Integrate with your tools
+---
 
-* [Set up project integrations](https://github.com/Vanilaz/Mylog/settings)
-
-## Collaborate with your team
-
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+## 🛡️ Security & Enterprise Compliance
+- **Offline / Intranet-Ready:** Zero external CDN dependencies (all styles, scripts, and charts are fully self-contained in `wwwroot`).
+- **Path Traversal Protection:** All file and directory accesses are strictly validated against `AllowedFolders` using canonical paths to prevent `../` directory escapes.

@@ -1,6 +1,9 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.SignalR;
 using MyLog.Hubs;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace MyLog.Services;
 
@@ -9,7 +12,8 @@ public sealed class LogTailService : ILogTailService, IDisposable
     private readonly IFileBrowserService _files;
     private readonly IHubContext<LogHub> _hub;
     private readonly ILogger<LogTailService> _logger;
-    private readonly ConcurrentDictionary<string, TailSubscription> _subscriptions = new();
+    private readonly ConcurrentDictionary<string, string> _connectionToPath = new();
+    private readonly ConcurrentDictionary<string, SharedTailSubscription> _sharedTails = new();
 
     public LogTailService(IFileBrowserService files, IHubContext<LogHub> hub, ILogger<LogTailService> logger)
     {
@@ -17,63 +21,97 @@ public sealed class LogTailService : ILogTailService, IDisposable
         _hub = hub;
         _logger = logger;
     }
+    
+    private static string GetGroupName(string path) 
+    {
+        // Safe group name for SignalR
+        return Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(path))).Replace("=", "").Replace("+", "").Replace("/", "");
+    }
 
     public async Task SubscribeAsync(string connectionId, string path, CancellationToken cancellationToken)
     {
         var safePath = _files.GetSafeFilePath(path);
         await UnsubscribeAsync(connectionId);
+        
+        _connectionToPath[connectionId] = safePath;
+        var groupName = GetGroupName(safePath);
+        
+        await _hub.Groups.AddToGroupAsync(connectionId, groupName, cancellationToken);
 
-        var subscription = new TailSubscription(connectionId, safePath, _hub, _logger);
-        try
+        lock (_sharedTails)
         {
-            _subscriptions[connectionId] = subscription;
-            await subscription.StartAsync(cancellationToken);
-        }
-        catch
-        {
-            // Never leave a half-started subscription (and its watcher) behind.
-            _subscriptions.TryRemove(new KeyValuePair<string, TailSubscription>(connectionId, subscription));
-            subscription.Dispose();
-            throw;
+            if (!_sharedTails.TryGetValue(safePath, out var sub))
+            {
+                sub = new SharedTailSubscription(safePath, groupName, _hub, _logger);
+                _sharedTails[safePath] = sub;
+                _ = sub.StartAsync(CancellationToken.None);
+            }
+            sub.SubscriberCount++;
+            
+            // Send the initial tail block to just this new connection
+            _ = sub.SendInitialTailAsync(connectionId);
         }
     }
 
-    public Task UnsubscribeAsync(string connectionId)
+    public async Task UnsubscribeAsync(string connectionId)
     {
-        if (_subscriptions.TryRemove(connectionId, out var subscription)) subscription.Dispose();
-        return Task.CompletedTask;
+        if (_connectionToPath.TryRemove(connectionId, out var safePath))
+        {
+            var groupName = GetGroupName(safePath);
+            await _hub.Groups.RemoveFromGroupAsync(connectionId, groupName);
+            
+            lock (_sharedTails)
+            {
+                if (_sharedTails.TryGetValue(safePath, out var sub))
+                {
+                    sub.SubscriberCount--;
+                    if (sub.SubscriberCount <= 0)
+                    {
+                        _sharedTails.TryRemove(safePath, out _);
+                        sub.Dispose();
+                    }
+                }
+            }
+        }
     }
 
     public void Dispose()
     {
-        foreach (var connectionId in _subscriptions.Keys)
+        foreach (var sub in _sharedTails.Values)
         {
-            if (_subscriptions.TryRemove(connectionId, out var subscription)) subscription.Dispose();
+            sub.Dispose();
         }
+        _sharedTails.Clear();
     }
 
-    private sealed class TailSubscription : IDisposable
+    private sealed class SharedTailSubscription : IDisposable
     {
-        // FileSystemWatcher is unreliable on network shares (and silently dies when a
-        // share blips), so a slow timer always backstops it.
         private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(2);
         private const long InitialTailBytes = 64 * 1024;
+        private const long MaxCatchupBytes = 512 * 1024; // 512 KB
+        private const int MaxChunkBytes = 64 * 1024; // 64 KB per chunk
+        private const int MaxChunksPerPump = 2; // 128 KB max per batch flush
+        private const int DebounceMs = 150;
+        private const int MaxThrottleMs = 300;
 
-        private readonly string _connectionId;
         private readonly string _path;
+        private readonly string _groupName;
         private readonly IHubContext<LogHub> _hub;
         private readonly ILogger _logger;
         private readonly FileSystemWatcher? _watcher;
+        private readonly Timer _debounceTimer;
         private readonly Timer _poller;
         private readonly SemaphoreSlim _gate = new(1, 1);
         private readonly CancellationTokenSource _disposed = new();
 
         private long _position;
+        private long _lastPumpTicks;
+        public int SubscriberCount { get; set; }
 
-        public TailSubscription(string connectionId, string path, IHubContext<LogHub> hub, ILogger logger)
+        public SharedTailSubscription(string path, string groupName, IHubContext<LogHub> hub, ILogger logger)
         {
-            _connectionId = connectionId;
             _path = path;
+            _groupName = groupName;
             _hub = hub;
             _logger = logger;
 
@@ -93,29 +131,65 @@ public sealed class LogTailService : ILogTailService, IDisposable
             }
             catch (Exception exception)
             {
-                // UNC paths and some mounts refuse to host a watcher at all; polling still works.
                 _logger.LogWarning(exception, "File watcher unavailable for {Path}; falling back to polling", path);
                 _watcher = null;
             }
 
+            _debounceTimer = new Timer(_ => _ = PumpAsync(), null, Timeout.Infinite, Timeout.Infinite);
             _poller = new Timer(_ => _ = PumpAsync(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
         }
 
-        public async Task StartAsync(CancellationToken cancellationToken)
+        public Task StartAsync(CancellationToken cancellationToken)
         {
-            cancellationToken.ThrowIfCancellationRequested();
             if (_watcher is not null)
             {
                 try { _watcher.EnableRaisingEvents = true; }
                 catch (Exception exception) { _logger.LogWarning(exception, "Could not enable watcher for {Path}", _path); }
             }
             _poller.Change(PollInterval, PollInterval);
-
-            // Send the initial tail before returning so the client cannot race it.
-            await PumpAsync(isInitial: true);
+            return Task.CompletedTask;
+        }
+        
+        public async Task SendInitialTailAsync(string connectionId) 
+        {
+            try 
+            {
+                await using var stream = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 64 * 1024, useAsync: true);
+                var pos = Math.Max(0, stream.Length - InitialTailBytes);
+                if (pos >= stream.Length) return;
+                
+                stream.Position = pos;
+                using var reader = new StreamReader(stream, detectEncodingFromByteOrderMarks: false);
+                if (pos > 0) await reader.ReadLineAsync(_disposed.Token);
+                var text = await reader.ReadToEndAsync(_disposed.Token);
+                
+                if (text.Length > 0 && !_disposed.IsCancellationRequested)
+                {
+                    await _hub.Clients.Client(connectionId).SendAsync("LogAppended", text, _disposed.Token);
+                }
+            } 
+            catch { /* Ignore */ }
         }
 
-        private void OnFileEvent(object? sender, FileSystemEventArgs args) => _ = PumpAsync();
+        private void OnFileEvent(object? sender, FileSystemEventArgs args) => SchedulePump();
+
+        private void SchedulePump()
+        {
+            if (_disposed.IsCancellationRequested) return;
+
+            var now = Environment.TickCount64;
+            var elapsed = now - Interlocked.Read(ref _lastPumpTicks);
+
+            if (elapsed >= MaxThrottleMs)
+            {
+                _ = PumpAsync();
+            }
+            else
+            {
+                try { _debounceTimer.Change(DebounceMs, Timeout.Infinite); }
+                catch (ObjectDisposedException) { }
+            }
+        }
 
         private void OnWatcherError(object? sender, ErrorEventArgs args)
         {
@@ -127,25 +201,26 @@ public sealed class LogTailService : ILogTailService, IDisposable
             catch { /* watcher already dead */ }
         }
 
-        /// <summary>
-        /// Reads everything appended since the last read and pushes it to the client.
-        /// A change notification that arrives while a read is in flight is discarded
-        /// (there is nowhere to queue it), so the loop re-checks the file length before
-        /// releasing the gate rather than trusting that another notification will follow.
-        /// Together with the poll timer this makes delivery depend on the file's actual
-        /// length instead of on the watcher firing at the right moment.
-        /// </summary>
-        private async Task PumpAsync(bool isInitial = false)
+        private async Task PumpAsync()
         {
             if (_disposed.IsCancellationRequested) return;
-            if (!await _gate.WaitAsync(0)) return; // a pump is already running; it will re-check
+            if (!await _gate.WaitAsync(0)) return;
+
+            Interlocked.Exchange(ref _lastPumpTicks, Environment.TickCount64);
 
             try
             {
-                while (!_disposed.IsCancellationRequested)
+                var chunksSent = 0;
+                while (!_disposed.IsCancellationRequested && chunksSent < MaxChunksPerPump)
                 {
-                    if (!await ReadOnceAsync(isInitial)) break;
-                    isInitial = false;
+                    if (!await ReadOnceAsync()) break;
+                    chunksSent++;
+                }
+
+                if (chunksSent >= MaxChunksPerPump && !_disposed.IsCancellationRequested)
+                {
+                    try { _debounceTimer.Change(50, Timeout.Infinite); }
+                    catch (ObjectDisposedException) { }
                 }
             }
             catch (Exception exception)
@@ -158,31 +233,72 @@ public sealed class LogTailService : ILogTailService, IDisposable
             }
         }
 
-        /// <returns><c>true</c> when more data may already be waiting.</returns>
-        private async Task<bool> ReadOnceAsync(bool isInitial)
+        private async Task<bool> ReadOnceAsync()
         {
             await using var stream = new FileStream(_path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 64 * 1024, useAsync: true);
 
-            // Rolled or truncated file: restart from the beginning.
-            if (stream.Length < _position) _position = 0;
-            if (stream.Length == _position) return false;
-
-            stream.Position = _position;
-            using var reader = new StreamReader(stream, detectEncodingFromByteOrderMarks: false);
-
-            // The very first read starts mid-file, so drop the partial first line.
-            if (isInitial && _position > 0) await reader.ReadLineAsync(_disposed.Token);
-
-            var text = await reader.ReadToEndAsync(_disposed.Token);
-            _position = stream.Length;
-
-            if (text.Length > 0 && !_disposed.IsCancellationRequested)
+            if (stream.Length < _position)
             {
-                await _hub.Clients.Client(_connectionId).SendAsync("LogAppended", text, _disposed.Token);
+                _position = Math.Max(0, stream.Length - InitialTailBytes);
             }
 
-            // Something may have been appended while we were reading.
-            return new FileInfo(_path).Length > _position;
+            if (stream.Length == _position) return false;
+
+            if (stream.Length - _position > MaxCatchupBytes)
+            {
+                _position = Math.Max(0, stream.Length - InitialTailBytes);
+                if (!_disposed.IsCancellationRequested)
+                {
+                    await _hub.Clients.Group(_groupName).SendAsync(
+                        "LogAppended",
+                        "\n[... Output skipped to protect memory due to rapid log burst ...]\n",
+                        _disposed.Token);
+                }
+            }
+
+            return await ReadChunkAndSendAsync(stream);
+        }
+
+        private async Task<bool> ReadChunkAndSendAsync(FileStream stream)
+        {
+            var available = stream.Length - _position;
+            if (available <= 0) return false;
+
+            var bytesToRead = (int)Math.Min(available, MaxChunkBytes);
+            var buffer = ArrayPool<byte>.Shared.Rent(bytesToRead);
+
+            try
+            {
+                stream.Position = _position;
+                var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, bytesToRead), _disposed.Token);
+                if (bytesRead <= 0) return false;
+
+                var bytesToSend = bytesRead;
+                var hasMore = stream.Length > _position + bytesRead;
+
+                if (hasMore)
+                {
+                    var lastNewline = Array.LastIndexOf(buffer, (byte)'\n', bytesRead - 1, bytesRead);
+                    if (lastNewline >= 0)
+                    {
+                        bytesToSend = lastNewline + 1;
+                    }
+                }
+
+                var text = Encoding.UTF8.GetString(buffer, 0, bytesToSend);
+                _position += bytesToSend;
+
+                if (text.Length > 0 && !_disposed.IsCancellationRequested)
+                {
+                    await _hub.Clients.Group(_groupName).SendAsync("LogAppended", text, _disposed.Token);
+                }
+
+                return stream.Length > _position;
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
 
         public void Dispose()
@@ -197,9 +313,10 @@ public sealed class LogTailService : ILogTailService, IDisposable
                 _watcher.Dispose();
             }
 
+            _debounceTimer.Dispose();
             _poller.Dispose();
-            // The CTS is deliberately not disposed: an in-flight pump may still touch
-            // its token, and disposing it would turn that into an ObjectDisposedException.
+            _gate.Dispose();
+            _disposed.Dispose();
         }
     }
 }

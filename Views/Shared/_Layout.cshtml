@@ -4,7 +4,20 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <title>@ViewData["Title"] - MyLog</title>
+        @inject Microsoft.Extensions.Configuration.IConfiguration Config
+    @{
+        var envName = Config["AppEnvironment"];
+        var isPro = string.IsNullOrWhiteSpace(envName) || envName.Equals("PRO", StringComparison.OrdinalIgnoreCase) || envName.Equals("Production", StringComparison.OrdinalIgnoreCase);
+        var envSuffix = isPro ? "" : $" [{envName}]";
+        var themeColor = envName?.ToUpperInvariant() switch
+        {
+            "SIT" => "#3b82f6",
+            "UAT" => "#eab308",
+            _ => "#22c55e"
+        };
+    }
+    <meta name="theme-color" content="@themeColor" />
+    <title>@ViewData["Title"] - MyLog@(envSuffix)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
@@ -14,7 +27,9 @@
     <link rel="stylesheet" media="print" onload="this.media='all';this.onload=null"
           href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&amp;family=Source+Sans+3:wght@400;500;600&amp;family=Fira+Code:wght@400;500&amp;display=swap" />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&amp;family=Source+Sans+3:wght@400;500;600&amp;family=Fira+Code:wght@400;500&amp;display=swap" /></noscript>
-    <link rel="icon" type="image/x-icon" href="~/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="~/icon-32.png" />
+    <link rel="manifest" href="~/manifest.json" />
+    <link rel="apple-touch-icon" href="~/icon-192.png" />
     <script>
         // Apply the stored theme before first paint so the page never flashes the wrong palette.
         (() => {
@@ -37,7 +52,20 @@
         window.appBasePath = '@Url.Content("~")';
         if (window.appBasePath === '/') window.appBasePath = '';
     </script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
+    <script type="module" src="~/js/main.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register(window.appBasePath + '/service-worker.js')
+                    .then(reg => {
+                        reg.update();
+                        console.log('ServiceWorker registered and checked for updates');
+                    })
+                    .catch(err => console.error('ServiceWorker registration failed: ', err));
+            });
+        }
+    </script>
 </body>
 </html>
+
