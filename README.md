@@ -100,6 +100,9 @@
 
 ### Run Locally
 ```bash
+# คัดลอกคอนฟิกตัวอย่างสำหรับใช้งาน
+cp appsettings.example.json appsettings.json
+
 dotnet restore
 dotnet run
 ```
